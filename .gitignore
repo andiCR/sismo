@@ -1,0 +1,13 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Local Claude Code settings (launch.json is kept: it starts the dev server)
+.claude/settings.local.json
+
+# Dependencies / builds, if ever added
+node_modules/
+dist/
