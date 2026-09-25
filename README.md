@@ -3,6 +3,8 @@
 A Windy-style map of seismic activity. It focuses on Costa Rica and works worldwide.
 It is a static site (HTML, CSS and JS) with no build step and no backend.
 
+**Live site:** https://andicr.github.io/sismo/ (Spanish: https://andicr.github.io/sismo/?lang=es)
+
 ## Run it locally
 
 ```powershell
@@ -13,7 +15,9 @@ Then open http://localhost:5173. Any static server works; `serve.ps1` exists bec
 
 ## Deploy
 
-Upload the folder to any static host: GitHub Pages, Netlify, Cloudflare Pages or Vercel. All data is fetched directly by the browser, and every source sends `Access-Control-Allow-Origin: *`.
+The site is published with **GitHub Pages** from the `main` branch (root folder). Every push to `main` redeploys automatically within a minute or two. Settings: https://github.com/andiCR/sismo/settings/pages
+
+It also works on any other static host (Netlify, Cloudflare Pages, Vercel). All data is fetched directly by the browser, and every source sends `Access-Control-Allow-Origin: *`.
 
 ## Data sources
 
