@@ -60,7 +60,8 @@
   } catch { /* ignore malformed data */ }
 
   function saveSettings() {
-    const { source, period, minMag, colorBy, inView, sort, globe, layers, lang } = S;
+    const { source, period, colorBy, inView, sort, globe, layers, lang } = S;
+    const minMag = S.savedMinMag ?? S.minMag; // a shared link's temporary filter isn't remembered
     try { localStorage.setItem('sismo:settings', JSON.stringify({ source, period, minMag, colorBy, inView, sort, globe, layers, lang })); } catch { /* private mode */ }
   }
 
@@ -69,6 +70,7 @@
   const safeUrl = u => (/^https:\/\//.test(u || '') ? u : null);
   const fmtMag = m => (m == null ? '?' : m.toFixed(1));
   const magOf = e => e.mag ?? -9;
+  const passesMag = e => S.minMag <= 0 || magOf(e) >= S.minMag;
   const placeOf = e => I18N.place(e.place);
 
   // Locale-dependent formatters; rebuilt when the language changes.
@@ -315,7 +317,8 @@
   function styleFrame() {
     if (!map.getLayer('quakes')) return;
     const live = S.cursor == null, ref = live ? Date.now() : S.cursor, span = PERIODS[S.period];
-    const base = ['>=', ['coalesce', ['get', 'mag'], -9], S.minMag];
+    // "All" (0) really means all, including events without a magnitude yet or with negative ones.
+    const base = S.minMag > 0 ? ['>=', ['coalesce', ['get', 'mag'], -9], S.minMag] : ['all'];
     const filt = live ? base : ['all', base, ['<=', ['get', 't'], ref]];
     const color = colorExpr(ref);
 
@@ -349,7 +352,7 @@
     for (const [id, e] of S.events) {
       if (e.t < start && id !== S.pinned?.id) { S.events.delete(id); continue; }
       features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [e.lon, e.lat] }, properties: { id: e.id, t: e.t, mag: e.mag, depth: e.depth } });
-      if (now - e.t < LIVE_PULSE_MS && magOf(e) >= S.minMag) recent++;
+      if (now - e.t < LIVE_PULSE_MS && passesMag(e)) recent++;
     }
     S.recentCount = recent;
     map.getSource('quakes')?.setData({ type: 'FeatureCollection', features });
@@ -419,7 +422,7 @@
     if (!isNew || action === 'update') return;
     const fresh = Date.now() - e.t < 2 * HOUR;
     const relevant = inBounds(map.getBounds(), e.lon, e.lat) || magOf(e) >= 5;
-    if (fresh && relevant && magOf(e) >= S.minMag) toastEvent(e);
+    if (fresh && relevant && passesMag(e)) toastEvent(e);
   }
 
   // ---------------------------------------------------------------- list + detail
@@ -428,7 +431,7 @@
     const ref = ignoreCursor || S.cursor == null ? Infinity : S.cursor;
     const out = [];
     for (const e of S.events.values()) {
-      if (magOf(e) < S.minMag || e.t > ref) continue;
+      if (!passesMag(e) || e.t > ref) continue;
       if (b && !inBounds(b, e.lon, e.lat)) continue;
       out.push(e);
     }
@@ -605,6 +608,23 @@
     if (!e) { toast(`<div><b>${esc(T('deep.notFound'))}</b></div>`, { kind: 'error' }); return; }
     S.pinned = e;
     S.events.set(e.id, e);
+    // Make sure the linked quake is actually drawn: lower the magnitude filter (to the slider's
+    // 0.5 steps) and turn the quakes layer on if needed. Not saved; the visitor's settings stay.
+    const adjusted = [];
+    if (!passesMag(e)) {
+      S.savedMinMag = S.minMag;
+      S.minMag = e.mag == null ? 0 : Math.max(0, Math.floor(e.mag * 2) / 2);
+      adjusted.push(S.minMag > 0 ? `M${S.minMag.toFixed(1)}+` : T('all').toLowerCase());
+    }
+    if (!S.layers.quakes) {
+      S.layers.quakes = true;
+      applyLayerVisibility();
+      adjusted.push(T('layer.quakes').toLowerCase());
+    }
+    if (adjusted.length) {
+      syncControls();
+      toast(`<div><b>${esc(T('deep.adjusted'))}</b><span>${esc(adjusted.join(' · '))}</span></div>`, { timeout: 6000 });
+    }
     refreshAll();
     select(e.id);
     // Jump rather than fly: the event may be on the other side of the world from the default view.
@@ -993,6 +1013,7 @@
   const minMagInput = $('#minMag');
   minMagInput.addEventListener('input', () => {
     S.minMag = parseFloat(minMagInput.value);
+    S.savedMinMag = null; // the visitor chose a value themselves
     $('#minMagOut').textContent = S.minMag > 0 ? `M${S.minMag.toFixed(1)}+` : T('all');
     styleFrame(); renderListThrottled();
   });
