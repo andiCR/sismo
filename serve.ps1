@@ -20,8 +20,8 @@ try {
     $res = $ctx.Response
     try {
       $path = [Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath).TrimStart('/')
-      if ($path -eq '') { $path = 'index.html' }
       $file = [IO.Path]::GetFullPath((Join-Path $root $path))
+      if (Test-Path $file -PathType Container) { $file = Join-Path $file 'index.html' } # folder URLs, like GitHub Pages
       if ($file.StartsWith($root) -and (Test-Path $file -PathType Leaf)) {
         $bytes = [IO.File]::ReadAllBytes($file)
         $ext = [IO.Path]::GetExtension($file).ToLower()

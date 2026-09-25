@@ -86,6 +86,23 @@ window.I18N = (() => {
       'geo.failed': "Couldn't get your location",
       'volcano.popup': 'Active volcano · monitored by OVSICORI',
       'attrib.quakes': 'Quakes', 'attrib.plates': 'Plates',
+      'nearTown': ({ km, dir, town }) => (km < 3 ? `near ${town}` : `${km} km ${dir} of ${town}`),
+      'temblo.q': 'Did it shake?',
+      'temblo.near': 'near you',
+      'temblo.now': ({ ago }) => `Yes · ${ago}`,
+      'temblo.recent': ({ ago }) => `Last felt quake · ${ago}`,
+      'temblo.calm': 'No felt quakes in the last 24 h',
+      'temblo.last': ({ mag, ago }) => `Last recorded: M${mag}, ${ago}`,
+      'temblo.hint': '"Likely felt" is an estimate from magnitude and depth',
+      'share': 'Share',
+      'share.copied': 'Link copied',
+      'share.text': ({ mag, place }) => `M${mag} earthquake · ${place}`,
+      'deep.notFound': "Couldn't find that earthquake",
+      'og.crTime': 'Costa Rica time',
+      'og.more': 'Live map and details on Sismo.',
+      'og.siteSub': 'Live earthquake map',
+      'og.siteLine': 'Costa Rica and the world · data from OVSICORI, RSN-UCR, EMSC and USGS',
+      'og.data': ({ agency }) => `Data: ${agency}`,
     },
 
     es: {
@@ -168,6 +185,23 @@ window.I18N = (() => {
       'geo.failed': 'No se pudo obtener su ubicación',
       'volcano.popup': 'Volcán activo · vigilado por el OVSICORI',
       'attrib.quakes': 'Sismos', 'attrib.plates': 'Placas',
+      'nearTown': ({ km, dir, town }) => (km < 3 ? `cerca de ${town}` : `${km} km al ${dir.replace(/W/g, 'O')} de ${town}`),
+      'temblo.q': '¿Tembló?',
+      'temblo.near': 'cerca de usted',
+      'temblo.now': ({ ago }) => `Sí · ${ago}`,
+      'temblo.recent': ({ ago }) => `Último sismo sentido · ${ago}`,
+      'temblo.calm': 'Ningún sismo sentido en las últimas 24 h',
+      'temblo.last': ({ mag, ago }) => `Último registrado: M${mag}, ${ago}`,
+      'temblo.hint': '«Probablemente sentido» es una estimación según magnitud y profundidad',
+      'share': 'Compartir',
+      'share.copied': 'Enlace copiado',
+      'share.text': ({ mag, place }) => `Sismo M${mag} · ${place}`,
+      'deep.notFound': 'No se encontró ese sismo',
+      'og.crTime': 'hora de Costa Rica',
+      'og.more': 'Mapa en vivo y detalles en Sismo.',
+      'og.siteSub': 'Mapa de sismos en vivo',
+      'og.siteLine': 'Costa Rica y el mundo · datos del OVSICORI, la RSN-UCR, el EMSC y el USGS',
+      'og.data': ({ agency }) => `Datos: ${agency}`,
     },
   };
 
@@ -195,7 +229,8 @@ window.I18N = (() => {
 
   // Prefer the visitor's own regional variant (es-CR, es-MX, en-GB…) for dates and numbers.
   function locale() {
-    const own = (navigator.languages || [navigator.language]).find(l => l && l.toLowerCase().startsWith(lang));
+    const nav = typeof navigator !== 'undefined' ? navigator : {};
+    const own = (nav.languages || [nav.language]).find(l => l && l.toLowerCase().startsWith(lang));
     return own || (lang === 'es' ? 'es-CR' : 'en-US');
   }
 
@@ -211,7 +246,7 @@ window.I18N = (() => {
 
   function setLang(l) {
     lang = STR[l] ? l : 'en';
-    apply();
+    if (typeof document !== 'undefined') apply(); // also runs under Node in the build script
   }
 
   // ---------------------------------------------------------------- place names

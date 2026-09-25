@@ -15,7 +15,22 @@ Then open http://localhost:5173. Any static server works; `serve.ps1` exists bec
 
 ## Deploy
 
-The site is published with **GitHub Pages** from the `main` branch (root folder). Every push to `main` redeploys automatically within a minute or two. Settings: https://github.com/andiCR/sismo/settings/pages
+The site is published with **GitHub Pages** by the workflow in `.github/workflows/pages.yml`. It runs on every push to `main` and every 10 minutes (GitHub sometimes starts scheduled runs a few minutes late). Each run:
+
+1. copies the app (`index.html`, `css/`, `js/`) into `_site/`
+2. runs `scripts/build-site.mjs`, which creates a **share page for each recent quake** at `e/<id>/` (Costa Rica area M2.5+, anywhere M5+, last 30 days), each with Open Graph tags and a 1200×630 preview image, so links shared on WhatsApp, X or Telegram show a proper card
+3. deploys `_site/` to Pages
+
+The build needs Node 20+ and has one dependency (`@resvg/resvg-js`, for SVG to PNG):
+
+```bash
+npm install
+npm run build
+```
+
+Share links (`/e/<id>/`) work immediately, even before the next build creates the page: `404.html` sends them into the app, which fetches the event directly. Only the preview card waits for the build. The card text is in Spanish (`SITE_LANG=en` changes it).
+
+If the repository has no activity for 60 days, GitHub pauses the 10-minute schedule; re-enable it under the Actions tab.
 
 It also works on any other static host (Netlify, Cloudflare Pages, Vercel). All data is fetched directly by the browser, and every source sends `Access-Control-Allow-Origin: *`.
 
@@ -40,6 +55,9 @@ Rough volumes: EMSC has ~570 events/day globally, ~11.5k per 30 days (about 6 MB
 - Toasts for new events in view (or any M5+ worldwide)
 - "Near me" shows distances to each event
 - Settings are remembered, and the map position is kept in the URL hash so views can be shared
+- **"¿Tembló?" banner**: the latest quake in Costa Rica (or near you, after "Near me") that was likely felt. The estimate uses magnitude and depth
+- **Share pages**: every quake has its own link (`/e/<id>/`) with a preview card for WhatsApp and social media, plus Share and WhatsApp buttons in the detail view
+- Distances to the nearest Costa Rican town ("23 km al SO de Jacó")
 - Responsive: bottom sheet and icon rail on phones
 - **Spanish and English**: ES/EN switch in the header. The default follows the browser language; `?lang=es` or `?lang=en` forces one, and the choice is remembered. Place names from EMSC and USGS are translated too ("Off Coast of Costa Rica" becomes "Frente a la costa de Costa Rica", "8 km W of David, Panama" becomes "8 km al O de David, Panamá")
 
@@ -48,6 +66,9 @@ Rough volumes: EMSC has ~570 events/day globally, ~11.5k per 30 days (about 6 MB
 - `index.html`: layout
 - `css/style.css`: styles
 - `js/i18n.js`: all interface text in English and Spanish, plus place-name translation. To add a language, add a block to `STR`.
+- `js/places.js`: Costa Rican towns, for "25 km al SO de Quepos" descriptions
+- `scripts/share-kit.js`: share-card images (SVG) and share-page templating; runs in Node and in the browser
+- `scripts/build-site.mjs`: builds `_site/` with the share pages (used by the workflow)
 - `js/sources.js`: data adapters (EMSC and USGS normalized to one event shape) and live feeds
 - `js/app.js`: map, layers, list, detail, timeline and replay
 - `serve.ps1`: tiny local static server

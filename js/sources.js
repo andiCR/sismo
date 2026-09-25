@@ -98,6 +98,19 @@ window.Sources = (() => {
     return j.features.map(fromEmsc).filter(valid);
   }
 
+  /** One event by app id ("emsc:<unid>" or "usgs:<id>"), e.g. for a shared link to an older quake. */
+  async function fetchEvent(id, signal) {
+    const i = id.indexOf(':'), src = id.slice(0, i), key = encodeURIComponent(id.slice(i + 1));
+    const url = src === 'usgs' ? `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${key}`
+      : src === 'emsc' ? `${EMSC_API}?format=json&eventid=${key}` : null;
+    if (!url) return null;
+    const j = await getJSON(url, signal);
+    const f = j.type === 'Feature' ? j : j.features?.[0]; // both APIs return a bare Feature for eventid
+    if (!f) return null;
+    const e = src === 'usgs' ? fromUsgs(f) : fromEmsc(f);
+    return valid(e) ? e : null;
+  }
+
   /* Live updates. EMSC pushes new/updated events over a WebSocket;
      USGS has no push channel, so poll its last-hour feed every minute. */
   function live(source, { onEvent, onStatus }) {
@@ -149,5 +162,5 @@ window.Sources = (() => {
     };
   }
 
-  return { fetchRecent, live, agency };
+  return { fetchRecent, fetchEvent, live, agency };
 })();

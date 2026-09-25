@@ -1,0 +1,15 @@
+{
+  "name": "sismo",
+  "private": true,
+  "description": "Live earthquake map for Costa Rica and the world",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-site.mjs"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

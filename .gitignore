@@ -8,6 +8,8 @@ desktop.ini
 # Local Claude Code settings (launch.json is kept: it starts the dev server)
 .claude/settings.local.json
 
-# Dependencies / builds, if ever added
+# Dependencies and build output
 node_modules/
-dist/
+package-lock.json
+_site/
+.cache/

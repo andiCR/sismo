@@ -48,6 +48,17 @@
   S.lang = I18N.langs.includes(urlLang) ? urlLang : I18N.langs.includes(saved.lang) ? saved.lang : browserLang;
   I18N.setLang(S.lang);
 
+  // Shared-event links: /e/<slug>/ pages carry the slug (and event data) in the page,
+  // other links use ?e=<slug>. Slugs are app ids with ':' → '-', e.g. emsc-20260925_0000078.
+  const idToSlug = id => id.replace(':', '-');
+  const slugToId = slug => slug.replace('-', ':');
+  const deepSlug = document.querySelector('meta[name="sismo-event"]')?.content || new URLSearchParams(location.search).get('e');
+  const deepId = deepSlug && /^(emsc|usgs)-[\w-]+$/.test(deepSlug) ? slugToId(deepSlug) : null;
+  try {
+    const embedded = JSON.parse(document.getElementById('sismo-event-data')?.textContent || 'null');
+    if (embedded && embedded.id === deepId) S.pinned = embedded; // kept even if older than the period
+  } catch { /* ignore malformed data */ }
+
   function saveSettings() {
     const { source, period, minMag, colorBy, inView, sort, globe, layers, lang } = S;
     try { localStorage.setItem('sismo:settings', JSON.stringify({ source, period, minMag, colorBy, inView, sort, globe, layers, lang })); } catch { /* private mode */ }
@@ -147,12 +158,21 @@
     return a.country ? `${a.name} · ${I18N.place(a.country)}` : a.name;
   }
 
+  // "25 km al SO de Quepos" for events near Costa Rica, else null.
+  function nearOf(e) {
+    const n = Places.nearest(e.lat, e.lon);
+    return n ? T('nearTown', { km: n.km, dir: n.dir, town: Places.label(n, I18N.place) }) : null;
+  }
+
+  const eventZoom = e => (magOf(e) >= 6.5 ? 5 : magOf(e) >= 5 ? 6 : 8);
+
   // ---------------------------------------------------------------- map
   const map = new maplibregl.Map({
     container: 'map',
     style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-    bounds: REGIONS.cr.bounds,
-    fitBoundsOptions: { padding: 40 },
+    ...(S.pinned
+      ? { center: [S.pinned.lon, S.pinned.lat], zoom: eventZoom(S.pinned) - 1 }
+      : { bounds: REGIONS.cr.bounds, fitBoundsOptions: { padding: 40 } }),
     hash: 'view',
     attributionControl: false,
     dragRotate: false,
@@ -327,7 +347,7 @@
     const features = [];
     let recent = 0;
     for (const [id, e] of S.events) {
-      if (e.t < start) { S.events.delete(id); continue; }
+      if (e.t < start && id !== S.pinned?.id) { S.events.delete(id); continue; }
       features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [e.lon, e.lat] }, properties: { id: e.id, t: e.t, mag: e.mag, depth: e.depth } });
       if (now - e.t < LIVE_PULSE_MS && magOf(e) >= S.minMag) recent++;
     }
@@ -340,6 +360,7 @@
   function refreshAll() {
     updateSource();
     styleFrame();
+    renderTemblo();
     renderList();
     computeBins();
     drawTimeline();
@@ -359,6 +380,10 @@
       const evs = await Sources.fetchRecent(S.source, PERIODS[S.period], ctl.signal);
       if (ctl.signal.aborted) return;
       S.events = new Map(evs.map(e => [e.id, e]));
+      if (S.pinned) {
+        if (S.events.has(S.pinned.id)) S.pinned = S.events.get(S.pinned.id); // fresher copy
+        else S.events.set(S.pinned.id, S.pinned);
+      }
       refreshAll();
     } catch (err) {
       if (err.name === 'AbortError') return;
@@ -455,7 +480,8 @@
 
   function renderDetail(e) {
     const a = Sources.agency(e);
-    const near = nearby(e);
+    const near = nearOf(e);
+    const nearbyEvents = nearby(e);
     const url = safeUrl(e.url);
     const inCR = userTZ === 'America/Costa_Rica';
     const alerts = [];
@@ -471,6 +497,7 @@
         <div class="d-mag" style="${swatch(e)}"><small>${esc(e.magType)}</small>${fmtMag(e.mag)}</div>
         <div>
           <h2>${esc(placeOf(e))}</h2>
+          ${near ? `<p class="d-near">${esc(near)}</p>` : ''}
           <p>${ago(e.t)}${e.evtype !== 'earthquake' ? ` · ${esc(I18N.evtype(e.evtype))}` : ''}</p>
         </div>
       </div>
@@ -483,15 +510,100 @@
         <div><dt>${T('d.energy')}</dt><dd>${energyText(e.mag)}</dd></div>
         ${S.userLoc ? `<div><dt>${T('d.fromYou')}</dt><dd>${F.num(Math.round(distKm(S.userLoc, e)))} km</dd></div>` : ''}
         ${e.felt ? `<div><dt>${T('d.felt')}</dt><dd>${F.num(e.felt)}</dd></div>` : ''}
-        <div class="wide"><dt>${T(`d.within.${S.period}`)}</dt><dd>${near.n
-          ? esc(T('d.nearby', { n: near.n, mag: fmtMag(near.top.mag), ago: ago(near.top.t) }))
+        <div class="wide"><dt>${T(`d.within.${S.period}`)}</dt><dd>${nearbyEvents.n
+          ? esc(T('d.nearby', { n: nearbyEvents.n, mag: fmtMag(nearbyEvents.top.mag), ago: ago(nearbyEvents.top.t) }))
           : T('d.noNearby')}</dd></div>
       </dl>
       <p class="d-effects"><b>${T('d.effects')}</b> ${effects(e.mag)}${e.depth >= 150 ? ' ' + T('d.deepNote') : ''}</p>
       <div class="d-actions">
+        <button class="btn primary" data-act="share">${ICON_SHARE}${T('share')}</button>
+        <a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(`${shareText(e)} ${shareUrl(e)}`)}" target="_blank" rel="noopener">${ICON_WA}WhatsApp</a>
         <button class="btn" data-act="zoom">${T('d.zoom')}</button>
-        ${url ? `<a class="btn primary" href="${esc(url)}" target="_blank" rel="noopener">${T('d.report')}</a>` : ''}
+        ${url ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener">${T('d.report')}</a>` : ''}
       </div>`;
+    document.title = `M${fmtMag(e.mag)} · ${placeOf(e)} · Sismo`;
+  }
+
+  // ---------------------------------------------------------------- sharing
+  const ICON_SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>';
+  const ICON_WA = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.4-.2z"/></svg>';
+
+  // Share pages live at <site>/e/<slug>/ (built by scripts/build-site.mjs).
+  const shareUrl = e => new URL(`e/${idToSlug(e.id)}/`, new URL('.', document.baseURI)).href;
+  const shareText = e => `${T('share.text', { mag: fmtMag(e.mag), place: nearOf(e) || placeOf(e) })} (${ago(e.t)})`;
+
+  async function shareEvent(e) {
+    const url = shareUrl(e), text = shareText(e);
+    // Native share sheet on phones; on desktop just copy the link.
+    if (navigator.share && window.matchMedia('(pointer: coarse)').matches) {
+      try { await navigator.share({ title: text, text, url }); return; } catch (err) { if (err.name === 'AbortError') return; }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      const ta = Object.assign(document.createElement('textarea'), { value: url });
+      document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove();
+    }
+    toast(`<div><b>${esc(T('share.copied'))}</b><span>${esc(url)}</span></div>`, { timeout: 5000 });
+  }
+
+  // ---------------------------------------------------------------- ¿Tembló? banner
+  const CR_BOX = { w: -86.3, e: -82.4, s: 7.8, n: 11.3 };
+  // Rough "people probably felt it" rule; shallow quakes are felt at lower magnitudes.
+  const likelyFelt = e => {
+    const m = magOf(e), d = e.depth ?? 10;
+    return (m >= 3 && d <= 70) || (m >= 3.5 && d <= 200) || m >= 4.2;
+  };
+
+  function renderTemblo() {
+    const el = $('#temblo');
+    if (!S.events.size) { el.hidden = true; return; }
+    const now = Date.now();
+    const inScope = S.userLoc
+      ? e => distKm(S.userLoc, e) <= 200
+      : e => e.lat >= CR_BOX.s && e.lat <= CR_BOX.n && e.lon >= CR_BOX.w && e.lon <= CR_BOX.e;
+    let felt = null, last = null;
+    for (const e of S.events.values()) {
+      if (now - e.t > DAY || !inScope(e)) continue;
+      if (!last || e.t > last.t) last = e;
+      if (likelyFelt(e) && (!felt || e.t > felt.t)) felt = e;
+    }
+    const target = felt || last;
+    const state = felt ? (now - felt.t < HOUR ? 'now' : 'recent') : 'calm';
+    let main, sub = '';
+    if (felt) {
+      main = T(state === 'now' ? 'temblo.now' : 'temblo.recent', { ago: ago(felt.t) });
+      sub = [nearOf(felt) || placeOf(felt), felt.depth != null ? T('depthKm', { n: Math.round(felt.depth) }) : null].filter(Boolean).join(' · ');
+    } else {
+      main = T('temblo.calm');
+      if (last) sub = T('temblo.last', { mag: fmtMag(last.mag), ago: ago(last.t) });
+    }
+    el.hidden = false;
+    el.dataset.state = state;
+    el.dataset.id = target?.id || '';
+    el.title = T('temblo.hint');
+    el.innerHTML = `
+      <span class="temblo-badge" ${felt ? `style="${swatch(felt)}"` : ''}>${felt ? fmtMag(felt.mag) : '✓'}</span>
+      <span class="temblo-text">
+        <span class="temblo-q">${esc(T('temblo.q'))} <small>${esc(S.userLoc ? T('temblo.near') : 'Costa Rica')}</small></span>
+        <b>${esc(main)}</b>
+        ${sub ? `<span class="temblo-sub">${esc(sub)}</span>` : ''}
+      </span>
+      ${target ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>' : ''}`;
+  }
+
+  // Open the event from a shared link once data is in; fetch it directly if it isn't in the loaded period.
+  async function openDeepLink() {
+    if (!deepId) return;
+    let e = S.events.get(deepId);
+    if (!e) {
+      try { e = await Sources.fetchEvent(deepId); } catch (err) { console.error(err); }
+    }
+    if (!e) { toast(`<div><b>${esc(T('deep.notFound'))}</b></div>`, { kind: 'error' }); return; }
+    S.pinned = e;
+    S.events.set(e.id, e);
+    refreshAll();
+    select(e.id, { fly: true });
   }
 
   function showView(view) {
@@ -510,12 +622,12 @@
   }
 
   function flyToEvent(e) {
-    const z = magOf(e) >= 6.5 ? 5 : magOf(e) >= 5 ? 6 : 8;
-    map.flyTo({ center: [e.lon, e.lat], zoom: Math.max(map.getZoom(), z), speed: 1.4 });
+    map.flyTo({ center: [e.lon, e.lat], zoom: Math.max(map.getZoom(), eventZoom(e)), speed: 1.4 });
   }
 
   function closeDetail() {
     S.selectedId = null;
+    document.title = T('meta.title');
     if (map.getLayer('selected')) map.setFilter('selected', ['==', ['get', 'id'], '']);
     showView('list');
     renderList();
@@ -757,6 +869,7 @@
     syncControls();
     updateModeUI();
     setAttribution();
+    renderTemblo();
     renderList();
     drawTimeline();
     if (detailOpen()) renderDetail(S.events.get(S.selectedId));
@@ -828,6 +941,7 @@
       meMarker?.remove();
       meMarker = new maplibregl.Marker({ element: el }).setLngLat([S.userLoc.lon, S.userLoc.lat]).addTo(map);
       map.flyTo({ center: [S.userLoc.lon, S.userLoc.lat], zoom: 7.5 });
+      renderTemblo();
       renderList();
     }, err => toast(`<div><b>${esc(T('geo.failed'))}</b><span>${esc(err.message)}</span></div>`, { kind: 'error' }),
     { enableHighAccuracy: false, timeout: 10000 });
@@ -881,6 +995,13 @@
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'back') closeDetail();
     else if (act === 'zoom' && S.selectedId) flyToEvent(S.events.get(S.selectedId));
+    else if (act === 'share' && S.selectedId) shareEvent(S.events.get(S.selectedId));
+  });
+
+  $('#temblo').addEventListener('click', e => {
+    e.stopPropagation(); // don't toggle the mobile sheet
+    const id = $('#temblo').dataset.id;
+    if (id) select(id, { fly: true });
   });
 
   $('#aboutBtn').addEventListener('click', () => showView($('#panel').dataset.view === 'about' ? 'list' : 'about'));
@@ -901,8 +1022,9 @@
     const e = S.events.get(ev.features[0].properties.id);
     if (!e) return;
     const depth = e.depth != null ? ' · ' + T('depthKm', { n: Math.round(e.depth) }) : '';
+    const near = nearOf(e);
     hoverPopup.setLngLat([e.lon, e.lat])
-      .setHTML(`<b>M${fmtMag(e.mag)}</b> ${esc(placeOf(e))}<br><span>${esc(ago(e.t) + depth)}</span>`)
+      .setHTML(`<b>M${fmtMag(e.mag)}</b> ${esc(placeOf(e))}${near ? `<br>${esc(near)}` : ''}<br><span>${esc(ago(e.t) + depth)}</span>`)
       .addTo(map);
   });
   map.on('mouseleave', 'quakes', () => { map.getCanvas().style.cursor = ''; hoverPopup.remove(); });
@@ -936,6 +1058,7 @@
 
   // ---------------------------------------------------------------- boot
   if (window.matchMedia('(max-width: 760px)').matches) $('#panel').classList.add('collapsed');
+  window.sismo.refresh = () => refreshAll();
   syncControls();
   updateModeUI();
 
@@ -950,6 +1073,7 @@
     collapseAttrib();
     map.once('idle', collapseAttrib);
     await firstLoad;
+    openDeepLink();
     startLive();
     requestAnimationFrame(tick);
     // Keep ages, relative times and the timeline current.
