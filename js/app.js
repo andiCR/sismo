@@ -449,6 +449,7 @@
     for (const e of evs) if (!strongest || magOf(e) > magOf(strongest)) strongest = e;
     evs.sort(S.sort === 'mag' ? (a, b) => magOf(b) - magOf(a) || b.t - a.t : (a, b) => b.t - a.t);
 
+    $('#listCount').textContent = F.num(evs.length);
     $('#summary').innerHTML = T('summary', { n: evs.length, count: F.num(evs.length), inView: S.inView })
       + (strongest ? ` · ${T('strongest')} <b>M${fmtMag(strongest.mag)}</b>` : '');
 
@@ -502,6 +503,10 @@
         </div>
       </div>
       ${alerts.map(t => `<div class="alert">⚠ ${esc(t)}</div>`).join('')}
+      <div class="d-actions d-share">
+        <button class="btn primary" data-act="share">${ICON_SHARE}${T('share')}</button>
+        <a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(`${shareText(e)} ${shareUrl(e)}`)}" target="_blank" rel="noopener">${ICON_WA}WhatsApp</a>
+      </div>
       <dl class="d-grid">
         <div><dt>${T('d.yourTime')}</dt><dd>${F.local.format(e.t)}</dd></div>
         <div><dt>${T(inCR ? 'd.utc' : 'd.crTime')}</dt><dd>${(inCR ? F.utc : F.cr).format(e.t)}</dd></div>
@@ -516,8 +521,6 @@
       </dl>
       <p class="d-effects"><b>${T('d.effects')}</b> ${effects(e.mag)}${e.depth >= 150 ? ' ' + T('d.deepNote') : ''}</p>
       <div class="d-actions">
-        <button class="btn primary" data-act="share">${ICON_SHARE}${T('share')}</button>
-        <a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(`${shareText(e)} ${shareUrl(e)}`)}" target="_blank" rel="noopener">${ICON_WA}WhatsApp</a>
         <button class="btn" data-act="zoom">${T('d.zoom')}</button>
         ${url ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener">${T('d.report')}</a>` : ''}
       </div>`;
@@ -605,12 +608,48 @@
     refreshAll();
     select(e.id);
     // Jump rather than fly: the event may be on the other side of the world from the default view.
-    map.jumpTo({ center: [e.lon, e.lat], zoom: eventZoom(e) });
+    map.easeTo({ center: [e.lon, e.lat], zoom: eventZoom(e), offset: centerOffset(), duration: 0 });
   }
 
+  const isMobile = () => window.matchMedia('(max-width: 760px)').matches;
+
+  // Opening details/about expands the sheet; going back restores how the list was (collapsed or not).
+  let collapsedBeforeView = null;
   function showView(view) {
-    $('#panel').dataset.view = view;
-    if (view !== 'list') $('#panel').classList.remove('collapsed');
+    const panel = $('#panel');
+    if (view !== 'list') {
+      if (panel.dataset.view === 'list') collapsedBeforeView = panel.classList.contains('collapsed');
+      panel.classList.remove('collapsed');
+      closeMenus();
+    } else if (collapsedBeforeView !== null) {
+      panel.classList.toggle('collapsed', collapsedBeforeView);
+      collapsedBeforeView = null;
+    }
+    panel.dataset.view = view;
+    document.body.classList.toggle('detail-open', view === 'detail');
+  }
+
+  /* On phones the header and bottom sheet cover part of the map. This is the pixel offset
+     that puts a point in the middle of the part that's still visible. */
+  function centerOffset() {
+    if (!isMobile()) return [0, 0];
+    const top = $('#controls').getBoundingClientRect().bottom;
+    const tops = ['#panel', '#timeline'].map(s => $(s))
+      .filter(el => getComputedStyle(el).display !== 'none')
+      .map(el => el.getBoundingClientRect().top);
+    const bottom = window.innerHeight - Math.min(window.innerHeight, ...tops);
+    return [0, Math.round((top - bottom) / 2)];
+  }
+
+  // Phone menus: filters (source/period/regions) and layers.
+  function setMenu(el, btn, open) {
+    el.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', String(open));
+    if (el.id === 'rail') document.body.classList.toggle('rail-open', open);
+  }
+  function closeMenus() {
+    setMenu($('#controls'), $('#controlsToggle'), false);
+    setMenu($('#rail'), $('#railToggle'), false);
   }
 
   function select(id, { fly = false } = {}) {
@@ -621,10 +660,11 @@
     renderDetail(e);
     showView('detail');
     if (fly) flyToEvent(e);
+    else if (isMobile()) map.easeTo({ center: [e.lon, e.lat], offset: centerOffset(), duration: 400 }); // keep it above the sheet
   }
 
   function flyToEvent(e) {
-    map.flyTo({ center: [e.lon, e.lat], zoom: Math.max(map.getZoom(), eventZoom(e)), speed: 1.4 });
+    map.flyTo({ center: [e.lon, e.lat], zoom: Math.max(map.getZoom(), eventZoom(e)), offset: centerOffset(), speed: 1.4 });
   }
 
   function closeDetail() {
@@ -927,6 +967,7 @@
   $('#regions').addEventListener('click', e => {
     const r = REGIONS[e.target.closest('button')?.dataset.r];
     if (!r) return;
+    closeMenus(); // on phones, get the menu out of the way of the map
     if (r.bounds) map.fitBounds(r.bounds, { padding: 40, duration: 1400 });
     else map.flyTo({ center: r.center, zoom: r.zoom, duration: 1400 });
   });
@@ -962,9 +1003,20 @@
     renderList(); computeBins(); drawTimeline();
   });
 
+  $('#controlsToggle').addEventListener('click', () => {
+    const open = !$('#controls').classList.contains('open');
+    closeMenus();
+    setMenu($('#controls'), $('#controlsToggle'), open);
+  });
+  $('#railToggle').addEventListener('click', () => {
+    const open = !$('#rail').classList.contains('open');
+    closeMenus();
+    setMenu($('#rail'), $('#railToggle'), open);
+  });
+
   $('#rail').addEventListener('click', e => {
     const b = e.target.closest('button');
-    if (!b) return;
+    if (!b || b.id === 'railToggle') return;
     if (b.dataset.layer) {
       S.layers[b.dataset.layer] = !S.layers[b.dataset.layer];
       applyLayerVisibility();
@@ -1033,7 +1085,14 @@
   map.on('mouseenter', 'volcanoes', () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'volcanoes', () => { map.getCanvas().style.cursor = ''; });
 
+  map.on('dragstart', () => { if (isMobile()) closeMenus(); });
+
   map.on('click', ev => {
+    // On phones, a tap on the map first just closes an open menu.
+    if (isMobile() && ($('#controls').classList.contains('open') || $('#rail').classList.contains('open'))) {
+      closeMenus();
+      return;
+    }
     const p = ev.point;
     const box = [[p.x - 5, p.y - 5], [p.x + 5, p.y + 5]];
     const q = map.queryRenderedFeatures(box, { layers: ['quakes'] });

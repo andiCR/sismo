@@ -64,6 +64,8 @@ svg { display: block; }
 #left > * { pointer-events: auto; }
 
 #controls { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.controls-body { display: flex; flex-direction: column; gap: 10px; }
+#controlsToggle, #rail #railToggle, #listCount { display: none; } /* phone-only controls */
 
 .brand { display: flex; align-items: center; gap: 8px; }
 .brand .logo { width: 24px; height: 24px; color: var(--accent); }
@@ -221,6 +223,8 @@ input[type="range"] { width: 100%; margin: 4px 0; accent-color: var(--accent); b
 .muted { color: var(--muted); }
 .d-effects { background: var(--raise); border-radius: 10px; padding: 10px 12px; margin: 0 0 14px; color: #cfd6e2; }
 .d-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.d-actions.d-share { margin-bottom: 14px; }
+.d-actions.d-share .btn { flex: 1; justify-content: center; }
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 8px 12px; border-radius: 10px; font-weight: 500; text-decoration: none;
@@ -332,41 +336,89 @@ body.playing .play .i-pause { display: block; }
   box-shadow: 0 0 0 6px rgba(77, 163, 255, 0.25);
 }
 
-/* ---------- Small screens ---------- */
+/* ---------- Small screens: map first ----------
+   Compact header (filters behind a button), layers behind one button, slim timeline,
+   and the event list / quake details as a bottom sheet. */
 @media (max-width: 760px) {
-  :root { --gap: 8px; --tl-h: 100px; }
+  :root {
+    --gap: 8px;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --hdr-h: 50px;
+    --tl-h: 54px;
+    --bottom: calc(var(--gap) + var(--safe-b)); /* lowest free edge */
+  }
   .hide-sm { display: none; }
   .live { padding: 6px; }
   .live span { display: none; } /* status shown by the dot colour alone */
 
+  /* Header: one row; source/period/regions drop down from the filters button */
   #left { display: contents; }
   #controls {
-    position: fixed; z-index: 3;
-    top: var(--gap); left: var(--gap); right: calc(var(--gap) * 2 + 44px);
-    padding: 10px; gap: 8px;
+    position: fixed; z-index: 4;
+    top: var(--gap); left: var(--gap); right: var(--gap);
+    padding: 8px 8px 8px 12px; gap: 10px;
   }
-  #controls .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -10px; padding: 0 10px; }
+  #controls .brand { min-height: 32px; }
+  #controlsToggle { display: grid; }
+  #controls .controls-body { display: none; }
+  #controls.open .controls-body { display: flex; padding-bottom: 4px; }
+  #controls.open #controlsToggle { background: var(--raise-2); color: var(--text); }
+  #controls .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -8px 0 -12px; padding: 0 8px 0 12px; }
   #controls .chips::-webkit-scrollbar { display: none; }
 
+  /* Layers: a single button under the header that opens the full menu */
+  #rail { top: calc(var(--gap) * 2 + var(--hdr-h)); width: auto; padding: 4px; z-index: 3; }
+  #rail #railToggle { display: grid; place-items: center; padding: 8px; }
+  #rail > :not(#railToggle) { display: none; }
+  #rail.open > :not(#railToggle) { display: flex; }
+  #rail.open > hr { display: block; }
+  #rail.open #railToggle { background: var(--raise-2); color: var(--accent); }
+  #rail button { padding: 8px; }
+  #rail button span, .rail-title { display: none !important; }
+
+  /* Slim timeline; the colour legend shows only with the layers menu open */
+  #timeline {
+    bottom: var(--bottom); height: var(--tl-h);
+    flex-wrap: wrap; row-gap: 6px; padding: 7px 10px; gap: 8px;
+  }
+  .play { width: 38px; height: 38px; }
+  #speedBtn { display: none; }
+  .legend { display: none; order: -1; width: 100%; padding-left: 0; border-left: 0; }
+  body.rail-open .legend { display: flex; }
+  body.rail-open #timeline { height: auto; }
+  body.rail-open #panel { bottom: calc(var(--bottom) + var(--tl-h) + var(--gap) + 50px); } /* room for the legend row */
+  .tl-wrap { height: 40px; }
+
+  /* Bottom sheet */
   #panel {
     position: fixed; z-index: 3;
-    left: var(--gap); right: var(--gap); bottom: calc(var(--tl-h) + var(--gap) * 2);
-    max-height: 50vh;
+    left: var(--gap); right: var(--gap);
+    bottom: calc(var(--bottom) + var(--tl-h) + var(--gap));
+    max-height: min(60vh, calc(100% - var(--hdr-h) - var(--tl-h) - 48px));
   }
-  #panelToggle { display: grid; }
+  #panelToggle { display: inline-flex; align-items: center; gap: 4px; width: auto; padding: 0 8px; height: 36px; border-radius: 10px; background: var(--raise); color: var(--text); }
+  #listCount { display: inline; font-weight: 600; font-variant-numeric: tabular-nums; }
   #panelToggle svg { transition: transform 0.2s; }
   #panel:not(.collapsed) #panelToggle svg { transform: rotate(180deg); }
+
+  /* Collapsed: one row — ¿Tembló? + list button */
+  #panel.collapsed { flex-direction: row; align-items: center; }
   #panel.collapsed :is(.filters, .list, .detail) { display: none !important; }
-  #panel.collapsed .panel-head { display: flex !important; padding-bottom: 12px; }
+  #panel.collapsed .temblo { flex: 1; min-width: 0; margin: 6px 0 6px 6px; padding: 6px 8px; gap: 10px; border: 0; background: none; }
+  #panel.collapsed .temblo-badge { width: 36px; height: 36px; border-radius: 10px; font-size: 13px; }
+  #panel.collapsed .temblo > svg { display: none; }
+  #panel.collapsed .panel-head { padding: 6px 8px 6px 4px; }
+  #panel.collapsed #summary { display: none; }
 
-  #rail { width: auto; padding: 4px; }
-  #rail button { padding: 8px; }
-  #rail button span, .rail-title { display: none; }
+  /* Quake open: the sheet is the focus — no timeline or layers, sheet sits at the bottom */
+  body.detail-open #timeline, body.detail-open #rail { display: none; }
+  body.detail-open #panel { bottom: var(--bottom); max-height: min(52vh, calc(100% - var(--hdr-h) - 40px)); }
+  .detail { padding: 8px 14px 14px; }
+  .d-head .icon-btn { width: 36px; height: 36px; }
+  .d-hero { margin-bottom: 10px; }
+  .d-mag { width: 60px; height: 60px; font-size: 24px; }
 
-  #timeline { height: auto; flex-wrap: wrap; row-gap: 6px; padding: 8px 10px; }
-  .legend { order: -1; width: 100%; padding-left: 0; border-left: 0; }
-  .tl-wrap { height: 44px; }
-  .maplibregl-ctrl-bottom-right { bottom: calc(var(--tl-h) + var(--gap) * 2 + 56px); }
-  #toasts { top: auto; bottom: calc(var(--tl-h) + var(--gap) * 2 + 60px); }
-  #loading { top: auto; bottom: calc(var(--tl-h) + var(--gap) * 2 + 60px); }
+  .maplibregl-ctrl-bottom-right { bottom: calc(var(--bottom) + var(--tl-h) + 108px); }
+  body.detail-open .maplibregl-ctrl-bottom-right { display: none; }
+  #toasts, #loading { top: calc(var(--gap) * 2 + var(--hdr-h)); }
 }
