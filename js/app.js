@@ -603,7 +603,9 @@
     S.pinned = e;
     S.events.set(e.id, e);
     refreshAll();
-    select(e.id, { fly: true });
+    select(e.id);
+    // Jump rather than fly: the event may be on the other side of the world from the default view.
+    map.jumpTo({ center: [e.lon, e.lat], zoom: eventZoom(e) });
   }
 
   function showView(view) {
