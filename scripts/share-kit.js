@@ -176,8 +176,8 @@
     ${textPanel}
     ${brand(64, 76, 32)}
     <rect x="64" y="116" width="${d.mag.length > 3 ? 236 : 204}" height="118" rx="24" fill="${c}"/>
-    <text x="88" y="158" font-size="24" font-weight="700" fill="${ink(col)}" fill-opacity="0.75">M</text>
-    <text x="86" y="216" font-size="78" font-weight="700" fill="${ink(col)}">${xml(d.mag)}</text>
+    <text x="88" y="150" font-size="22" font-weight="700" fill="${ink(col)}" fill-opacity="0.75">M</text>
+    <text x="86" y="220" font-size="76" font-weight="700" fill="${ink(col)}">${xml(d.mag)}</text>
     ${lines.join('\n    ')}
     <text x="64" y="592" font-size="21" fill="#6f7b91">${xml(site)}  ·  ${xml(root.I18N.t('og.data', { agency: d.agency }))}</text>
   </svg>`;
