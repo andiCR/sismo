@@ -3,7 +3,7 @@
 A Windy-style map of seismic activity. It focuses on Costa Rica and works worldwide.
 It is a static site (HTML, CSS and JS) with no build step and no backend.
 
-**Live site:** https://andicr.github.io/sismo/ (Spanish: https://andicr.github.io/sismo/?lang=es)
+**Live site:** https://sismo.cr/ (Spanish: https://sismo.cr/?lang=es)
 
 ## Run it locally
 

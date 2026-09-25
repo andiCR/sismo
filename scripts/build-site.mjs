@@ -13,7 +13,7 @@ import { Resvg } from '@resvg/resvg-js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, '_site');
 const CACHE = path.join(ROOT, '.cache');
-const SITE_URL = (process.env.SITE_URL || 'https://andicr.github.io/sismo/').replace(/\/*$/, '/');
+const SITE_URL = (process.env.SITE_URL || 'https://sismo.cr/').replace(/\/*$/, '/');
 const LANG = process.env.SITE_LANG || 'es'; // share cards target Costa Rican WhatsApp groups
 const DAY = 864e5;
 const MAX_PAGES = 800;
