@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Sismo · Live Earthquake Map</title>
   <meta name="description" content="Live earthquake map for Costa Rica and the world, with data from OVSICORI, RSN-UCR, EMSC and USGS.">
-  <meta name="theme-color" content="#0a0e15">
+  <meta name="theme-color" content="#141311">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css" rel="stylesheet">
   <link href="css/style.css" rel="stylesheet">
 </head>
@@ -16,9 +16,9 @@
   <div id="map" aria-label="Earthquake map"></div>
 
   <div id="left">
-    <section id="controls" class="glass">
+    <section id="controls">
       <div class="brand">
-        <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h4l2-6 3 13 3-10 2 6 1.5-3H22"/></svg>
+        <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12h5l.8-1.6.9 2.8.9-2 .7 1.2h1.2l1.3-7.4 1.5 14.2 1.4-11 1.1 7.2 1-4.6.9 2.8.8-1.6H23"/></svg>
         <span class="name">Sismo</span>
         <span id="live" class="live" data-status="connecting"><i></i><span>Connecting</span></span>
         <div class="seg tiny" id="langSeg" role="group" data-i18n-aria="lang.label">
@@ -33,29 +33,38 @@
         </button>
       </div>
       <div class="controls-body">
-      <div class="seg" id="sourceSeg" role="group" data-i18n-aria="source.label">
-        <button data-v="EMSC">EMSC<span class="hide-sm"> + OVSICORI</span></button>
-        <button data-v="USGS">USGS</button>
-      </div>
-      <div class="seg" id="periodSeg" role="group" data-i18n-aria="period.label">
-        <button data-v="24h">24 h</button>
-        <button data-v="7d" data-i18n="period.7d">7 days</button>
-        <button data-v="30d" data-i18n="period.30d">30 days</button>
-      </div>
-      <div class="chips" id="regions" role="group" data-i18n-aria="regions.label">
-        <button data-r="cr">Costa Rica</button>
-        <button data-r="ca" data-i18n="region.ca">Central America</button>
-        <button data-r="am" data-i18n="region.am">Americas</button>
-        <button data-r="world" data-i18n="region.world">World</button>
-        <button id="nearMe">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
-          <span data-i18n="nearMe">Near me</span>
-        </button>
-      </div>
+        <div class="ctl-row">
+          <span class="ctl-label" data-i18n="ctl.source">Source</span>
+          <div class="seg" id="sourceSeg" role="group" data-i18n-aria="source.label">
+            <button data-v="EMSC">EMSC<span class="hide-sm"> + OVSICORI</span></button>
+            <button data-v="USGS">USGS</button>
+          </div>
+        </div>
+        <div class="ctl-row">
+          <span class="ctl-label" data-i18n="ctl.period">Period</span>
+          <div class="seg" id="periodSeg" role="group" data-i18n-aria="period.label">
+            <button data-v="24h">24 h</button>
+            <button data-v="7d" data-i18n="period.7d">7 days</button>
+            <button data-v="30d" data-i18n="period.30d">30 days</button>
+          </div>
+        </div>
+        <div class="ctl-row">
+          <span class="ctl-label" data-i18n="ctl.region">Go to</span>
+          <div class="chips" id="regions" role="group" data-i18n-aria="regions.label">
+            <button data-r="cr">Costa Rica</button>
+            <button data-r="ca" data-i18n="region.ca">Central America</button>
+            <button data-r="am" data-i18n="region.am">Americas</button>
+            <button data-r="world" data-i18n="region.world">World</button>
+            <button id="nearMe">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+              <span data-i18n="nearMe">Near me</span>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
-    <section id="panel" class="glass" data-view="list">
+    <section id="panel" data-view="list">
       <button id="temblo" class="temblo" hidden></button>
       <header class="panel-head">
         <div id="summary" data-i18n="loading">Loading…</div>
@@ -94,7 +103,7 @@
     </section>
   </div>
 
-  <nav id="rail" class="glass" data-i18n-aria="layers">
+  <nav id="rail" class="surface" data-i18n-aria="layers">
     <button id="railToggle" class="rail-toggle" data-i18n-title="layers" data-i18n-aria="layers" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5" stroke-linecap="round"/></svg>
     </button>
@@ -135,7 +144,7 @@
     </button>
   </nav>
 
-  <footer id="timeline" class="glass">
+  <footer id="timeline" class="surface">
     <button id="playBtn" class="play" data-i18n-aria="play">
       <svg class="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10-6.5a1 1 0 0 0 0-1.8l-10-6.5A1 1 0 0 0 8 5.5z"/></svg>
       <svg class="i-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></svg>
@@ -146,7 +155,7 @@
     <div id="legend" class="legend"></div>
   </footer>
 
-  <div id="loading" class="glass" hidden><span class="spinner"></span><span id="loadingText">Loading…</span></div>
+  <div id="loading" class="surface" hidden><span class="spinner"></span><span id="loadingText">Loading…</span></div>
   <div id="toasts" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>

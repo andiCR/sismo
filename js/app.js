@@ -151,8 +151,11 @@
       : ramp(DEPTH_STOPS, e.depth ?? 0);
   }
   const rgbCss = c => `rgb(${c.join(',')})`;
-  const inkFor = ([r, g, b]) => (0.299 * r + 0.587 * g + 0.114 * b > 120 ? '#0b0f17' : '#ffffff');
-  const swatch = e => { const c = evRGB(e); return `--c:${rgbCss(c)};--fg:${inkFor(c)}`; };
+  const inkFor = ([r, g, b]) => (0.299 * r + 0.587 * g + 0.114 * b > 120 ? '#141311' : '#ffffff');
+  // Marker size echoes the map symbol: a bigger quake gets a bigger dot.
+  const dotPx = m => Math.round(Math.min(16, Math.max(5, 3 + (m ?? 0) * 1.7)));
+  const swatch = e => { const c = evRGB(e); return `--c:${rgbCss(c)};--fg:${inkFor(c)};--s:${dotPx(e.mag)}px`; };
+  const magMark = (e, cls = 'mag') => `<span class="${cls}" style="${swatch(e)}"><i></i>${fmtMag(e.mag)}</span>`;
 
   function depthClass(d) {
     if (d == null) return '';
@@ -187,13 +190,20 @@
 
   const eventZoom = e => (magOf(e) >= 6.5 ? 5 : magOf(e) >= 5 ? 6 : 8);
 
+  // Keep fitted regions clear of the docked sidebar and timeline on desktop.
+  function fitPadding() {
+    if (window.matchMedia('(max-width: 760px)').matches) return 40;
+    const side = $('#left').getBoundingClientRect().right;
+    return { top: 40, right: 40, bottom: $('#timeline').offsetHeight + 30, left: side + 40 };
+  }
+
   // ---------------------------------------------------------------- map
   const map = new maplibregl.Map({
     container: 'map',
     style: BASEMAP.style,
     ...(S.pinned
       ? { center: [S.pinned.lon, S.pinned.lat], zoom: eventZoom(S.pinned) - 1 }
-      : { bounds: REGIONS.cr.bounds, fitBoundsOptions: { padding: 40 } }),
+      : { bounds: REGIONS.cr.bounds, fitBoundsOptions: { padding: fitPadding() } }),
     hash: 'view',
     attributionControl: false,
     dragRotate: false,
@@ -276,7 +286,7 @@
       layout: { 'circle-sort-key': magExpr },
       paint: {
         'circle-radius': radius(),
-        'circle-stroke-color': ['interpolate', ['linear'], magExpr, 3, 'rgba(8,11,18,0.75)', 5, 'rgba(255,255,255,0.9)'],
+        'circle-stroke-color': ['interpolate', ['linear'], magExpr, 3, 'rgba(20,19,17,0.75)', 5, 'rgba(255,255,255,0.9)'],
         'circle-stroke-width': ['interpolate', ['linear'], magExpr, 0, 0.6, 5, 1.2, 7, 2],
       },
     });
@@ -296,7 +306,7 @@
         'text-radial-offset': ['+', 0.5, ['/', magR, 11]],
         'symbol-sort-key': ['-', 0, magExpr],
       },
-      paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(10,14,21,0.9)', 'text-halo-width': 1.4 },
+      paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(20,19,17,0.9)', 'text-halo-width': 1.4 },
     });
 
     addVolcanoIcon();
@@ -307,7 +317,7 @@
         'text-field': ['step', ['zoom'], '', 6.5, ['get', 'name']],
         'text-font': FONT_REG, 'text-size': 11, 'text-anchor': 'top', 'text-offset': [0, 0.9], 'text-optional': true,
       },
-      paint: { 'text-color': '#ffb199', 'text-halo-color': 'rgba(10,14,21,0.9)', 'text-halo-width': 1.2 },
+      paint: { 'text-color': '#ffb199', 'text-halo-color': 'rgba(20,19,17,0.9)', 'text-halo-width': 1.2 },
     });
   }
 
@@ -316,7 +326,7 @@
     c.width = c.height = s;
     const g = c.getContext('2d');
     g.beginPath(); g.moveTo(s / 2, 5); g.lineTo(s - 5, s - 7); g.lineTo(5, s - 7); g.closePath();
-    g.lineJoin = 'round'; g.lineWidth = 4; g.strokeStyle = '#0a0e15'; g.stroke();
+    g.lineJoin = 'round'; g.lineWidth = 4; g.strokeStyle = '#141311'; g.stroke();
     g.fillStyle = '#ff7849'; g.fill();
     map.addImage('sismo-volcano', g.getImageData(0, 0, s, s), { pixelRatio: 2 });
   }
@@ -479,7 +489,7 @@
     $('#list').innerHTML = evs.slice(0, 250).map(e => {
       const a = Sources.agency(e);
       return `<button class="ev${e.id === S.selectedId ? ' sel' : ''}" data-id="${esc(e.id)}">
-        <span class="badge" style="${swatch(e)}">${fmtMag(e.mag)}</span>
+        ${magMark(e)}
         <span class="ev-main"><span class="ev-place">${esc(placeOf(e))}</span><span class="ev-meta">${esc(metaLine(e))}</span></span>
         ${a.cr ? `<span class="tag" title="${crTitle}">CR</span>` : ''}
       </button>`;
@@ -517,14 +527,12 @@
         <span>${esc(agencyLabel(a))}</span>
       </div>
       <div class="d-hero">
-        <div class="d-mag" style="${swatch(e)}"><small>${esc(e.magType)}</small>${fmtMag(e.mag)}</div>
-        <div>
-          <h2>${esc(placeOf(e))}</h2>
-          ${near ? `<p class="d-near">${esc(near)}</p>` : ''}
-          <p>${ago(e.t)}${e.evtype !== 'earthquake' ? ` · ${esc(I18N.evtype(e.evtype))}` : ''}</p>
-        </div>
+        <div class="d-mag" style="${swatch(e)}"><i></i><span>${fmtMag(e.mag)}</span><small>${esc(e.magType)}</small></div>
+        <h2>${esc(placeOf(e))}</h2>
+        ${near ? `<p class="d-near">${esc(near)}</p>` : ''}
+        <p>${ago(e.t)}${e.evtype !== 'earthquake' ? ` · ${esc(I18N.evtype(e.evtype))}` : ''}</p>
       </div>
-      ${alerts.map(t => `<div class="alert">⚠ ${esc(t)}</div>`).join('')}
+      ${alerts.map(t => `<div class="alert">${ICON_WARN}${esc(t)}</div>`).join('')}
       <div class="d-actions d-share">
         <button class="btn primary" data-act="share">${ICON_SHARE}${T('share')}</button>
         <a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(`${shareText(e)} ${shareUrl(e)}`)}" target="_blank" rel="noopener">${ICON_WA}WhatsApp</a>
@@ -550,6 +558,7 @@
   }
 
   // ---------------------------------------------------------------- sharing
+  const ICON_WARN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5L2.5 20h19L12 3.5zM12 10v4.5M12 17.5h.01"/></svg>';
   const ICON_SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>';
   const ICON_WA = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.4-.2z"/></svg>';
 
@@ -608,7 +617,7 @@
     el.dataset.id = target?.id || '';
     el.title = T('temblo.hint');
     el.innerHTML = `
-      <span class="temblo-badge" ${felt ? `style="${swatch(felt)}"` : ''}>${felt ? fmtMag(felt.mag) : '✓'}</span>
+      ${felt ? magMark(felt, 'temblo-mag') : '<span class="temblo-mag"><i></i></span>'}
       <span class="temblo-text">
         <span class="temblo-q">${esc(T('temblo.q'))} <small>${esc(S.userLoc ? T('temblo.near') : 'Costa Rica')}</small></span>
         <b>${esc(main)}</b>
@@ -671,7 +680,10 @@
   /* On phones the header and bottom sheet cover part of the map. This is the pixel offset
      that puts a point in the middle of the part that's still visible. */
   function centerOffset() {
-    if (!isMobile()) return [0, 0];
+    if (!isMobile()) { // centre of the map area beside the sidebar and above the timeline
+      const side = $('#left').getBoundingClientRect().right;
+      return [Math.round(side / 2), -Math.round($('#timeline').offsetHeight / 2)];
+    }
     const top = $('#controls').getBoundingClientRect().bottom;
     const tops = ['#panel', '#timeline'].map(s => $(s))
       .filter(el => getComputedStyle(el).display !== 'none')
@@ -717,7 +729,7 @@
   // ---------------------------------------------------------------- toasts
   function toast(html, { kind = '', timeout = 12000, onClick } = {}) {
     const el = document.createElement('button');
-    el.className = `toast glass ${kind}`;
+    el.className = `toast surface ${kind}`;
     el.innerHTML = html;
     const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 300); };
     el.addEventListener('click', () => { onClick?.(); close(); });
@@ -727,7 +739,7 @@
   }
 
   function toastEvent(e) {
-    toast(`<span class="badge" style="${swatch(e)}">${fmtMag(e.mag)}</span>
+    toast(`${magMark(e)}
       <div><b>${esc(T('toast.new'))}</b><span>${esc(placeOf(e))} · ${esc(Sources.agency(e).short)}</span></div>`,
     { onClick: () => select(e.id, { fly: true }) });
   }
@@ -788,7 +800,7 @@
 
     const top = 14, bottom = H - 13, bh = bottom - top;
     const cur = S.cursor ?? tl.end;
-    g.font = '10px Inter, system-ui, sans-serif';
+    g.font = '500 10.5px Archivo, system-ui, sans-serif';
 
     let labelEnd = -Infinity;
     for (const tk of ticks()) {
@@ -797,7 +809,7 @@
       g.fillRect(x, top, 1, bh);
       const lw = tk.label ? g.measureText(tk.label).width : 0;
       if (tk.label && x > labelEnd + 6 && x + lw < W) { // skip labels that would collide
-        g.fillStyle = 'rgba(180,192,210,0.6)';
+        g.fillStyle = 'rgba(200,192,180,0.6)';
         g.fillText(tk.label, x + 3, H - 2);
         labelEnd = x + 3 + lw;
       }
@@ -1007,7 +1019,7 @@
     const r = REGIONS[e.target.closest('button')?.dataset.r];
     if (!r) return;
     closeMenus(); // on phones, get the menu out of the way of the map
-    if (r.bounds) map.fitBounds(r.bounds, { padding: 40, duration: 1400 });
+    if (r.bounds) map.fitBounds(r.bounds, { padding: fitPadding(), duration: 1400 });
     else map.flyTo({ center: r.center, zoom: r.zoom, duration: 1400 });
   });
 
