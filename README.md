@@ -46,7 +46,7 @@ Rough volumes: EMSC has ~570 events/day globally, ~11.5k per 30 days (about 6 MB
 
 ## Features
 
-- Dark basemap (CARTO Dark Matter) with a globe toggle
+- Dark basemap (CARTO Dark Matter) with a globe toggle. Free, keyless fallbacks are built in if CARTO's free tier runs out: add `?basemap=openfreemap` or `?basemap=versatiles` to try them, or change the default in `BASEMAPS` in `js/app.js`
 - Circles sized by magnitude and colored by depth or age; recent events pulse
 - Density heatmap, plate boundaries, Costa Rican volcanoes, magnitude labels
 - Timeline histogram at the bottom: drag to scrub, or press play (or Space) to replay the period

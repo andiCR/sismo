@@ -17,8 +17,27 @@
   // Shallow quakes are "hot", deep ones cool: the usual seismology convention.
   const DEPTH_STOPS = [[0, '#ff4d5e'], [10, '#ff8a3d'], [35, '#ffd23f'], [70, '#8ee06b'], [150, '#35c3e8'], [300, '#6f7bff'], [700, '#c77dff']];
   const AGE_STOPS = [[0, '#ffffff'], [1, '#ff4d5e'], [24, '#ff9a3d'], [168, '#ffd23f'], [720, '#5d7390']];
-  const FONT_BOLD = ['Montserrat Medium', 'Open Sans Bold', 'Noto Sans Regular', 'HanWangHeiLight Regular', 'NanumBarunGothic Regular'];
-  const FONT_REG = ['Montserrat Regular', 'Open Sans Regular', 'Noto Sans Regular', 'HanWangHeiLight Regular', 'NanumBarunGothic Regular'];
+  // Dark basemaps: CARTO by default, with free fallbacks if we outgrow its free tier.
+  // Fonts must exist on each style's glyph server, and the free servers don't merge
+  // font stacks, so each lists a single font. ?basemap=<key> overrides.
+  const BASEMAPS = {
+    carto: {
+      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+      bold: ['Montserrat Medium', 'Open Sans Bold', 'Noto Sans Regular', 'HanWangHeiLight Regular', 'NanumBarunGothic Regular'],
+      regular: ['Montserrat Regular', 'Open Sans Regular', 'Noto Sans Regular', 'HanWangHeiLight Regular', 'NanumBarunGothic Regular'],
+    },
+    openfreemap: {
+      style: 'https://tiles.openfreemap.org/styles/dark',
+      bold: ['Noto Sans Bold'], regular: ['Noto Sans Regular'],
+    },
+    versatiles: {
+      style: 'https://tiles.versatiles.org/assets/styles/eclipse/style.json',
+      bold: ['noto_sans_bold'], regular: ['noto_sans_regular'],
+    },
+  };
+  const BASEMAP = BASEMAPS[new URLSearchParams(location.search).get('basemap')] || BASEMAPS.carto;
+  const FONT_BOLD = BASEMAP.bold;
+  const FONT_REG = BASEMAP.regular;
   const PLATES_URL = 'https://cdn.jsdelivr.net/gh/fraxen/tectonicplates@master/GeoJSON/PB2002_boundaries.json';
   const VOLCANOES = [
     ['Rincón de la Vieja', 10.830, -85.324], ['Miravalles', 10.748, -85.153], ['Tenorio', 10.673, -85.015],
@@ -171,7 +190,7 @@
   // ---------------------------------------------------------------- map
   const map = new maplibregl.Map({
     container: 'map',
-    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    style: BASEMAP.style,
     ...(S.pinned
       ? { center: [S.pinned.lon, S.pinned.lat], zoom: eventZoom(S.pinned) - 1 }
       : { bounds: REGIONS.cr.bounds, fitBoundsOptions: { padding: 40 } }),
@@ -284,7 +303,7 @@
     map.addLayer({
       id: 'volcanoes', type: 'symbol', source: 'volcanoes',
       layout: {
-        'icon-image': 'volcano', 'icon-allow-overlap': true,
+        'icon-image': 'sismo-volcano', 'icon-allow-overlap': true,
         'text-field': ['step', ['zoom'], '', 6.5, ['get', 'name']],
         'text-font': FONT_REG, 'text-size': 11, 'text-anchor': 'top', 'text-offset': [0, 0.9], 'text-optional': true,
       },
@@ -299,7 +318,7 @@
     g.beginPath(); g.moveTo(s / 2, 5); g.lineTo(s - 5, s - 7); g.lineTo(5, s - 7); g.closePath();
     g.lineJoin = 'round'; g.lineWidth = 4; g.strokeStyle = '#0a0e15'; g.stroke();
     g.fillStyle = '#ff7849'; g.fill();
-    map.addImage('volcano', g.getImageData(0, 0, s, s), { pixelRatio: 2 });
+    map.addImage('sismo-volcano', g.getImageData(0, 0, s, s), { pixelRatio: 2 });
   }
 
   function applyLayerVisibility() {
@@ -1150,7 +1169,7 @@
   map.on('load', async () => {
     setupLayers();
     applyLayerVisibility();
-    if (S.globe) map.setProjection({ type: 'globe' });
+    map.setProjection({ type: S.globe ? 'globe' : 'mercator' }); // some styles default to globe
     refreshAll();
     collapseAttrib();
     map.once('idle', collapseAttrib);
