@@ -61,6 +61,19 @@ Rough volumes: EMSC has ~570 events/day globally, ~11.5k per 30 days (about 6 MB
 - Responsive: bottom sheet and icon rail on phones
 - **Spanish and English**: ES/EN switch in the header. The default follows the browser language; `?lang=es` or `?lang=en` forces one, and the choice is remembered. Place names from EMSC and USGS are translated too ("Off Coast of Costa Rica" becomes "Frente a la costa de Costa Rica", "8 km W of David, Panama" becomes "8 km al O de David, Panamá")
 
+## Design guidance (Impeccable)
+
+UI work with AI agents follows [Impeccable](https://impeccable.style) (skill v4.3.1), vendored in `.claude/skills/impeccable/` with its agents in `.claude/agents/`. `PRODUCT.md` records who the site is for and what design must never compromise (for example, it must never look like an official alert service). Use `/impeccable` in Claude Code for its commands (`critique`, `audit`, `polish`, …).
+
+Its launcher needs no Node: on first use it downloads the matching engine binary from the project's GitHub releases into `~/.impeccable/bin/`, verified against a SHA-256 checksum. Scan for AI-UI anti-patterns with:
+
+```bash
+./.claude/skills/impeccable/scripts/impeccable detect index.html css js
+./.claude/skills/impeccable/scripts/impeccable detect http://localhost:5173/
+```
+
+The edit-time design check (hooks) is machine-local: it lives in the gitignored `.claude/settings.local.json`. To enable it on another machine, copy the `hooks` block from Impeccable's `universal.zip` release (`.claude/settings.json`) into that file.
+
 ## Files
 
 - `index.html`: layout
