@@ -272,6 +272,40 @@ input[type="range"] { width: 100%; margin: 4px 0; accent-color: var(--accent); b
 .d-share-wait .spinner { flex: none; }
 .d-share-wait button { flex: none; margin-left: auto; color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; }
 
+/* Reports and coverage: agency reports, witness photos, Wikipedia and matched news (js/context.js) */
+.ctx { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.ctx h3 { margin: 0 0 2px; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.ctx h4 { margin: 14px 0 6px; font-size: 12px; font-weight: 500; color: var(--faint); }
+.ctx-item { display: flex; gap: 12px; padding: 8px 0; color: inherit; text-decoration: none; }
+.ctx-item + .ctx-item { border-top: 1px solid var(--line); }
+.ctx-card { margin: 0 -8px; padding: 8px; border-radius: var(--r); transition: background 0.15s var(--ease); }
+.ctx-card + .ctx-card { border-top: 0; }
+.ctx-card:hover { background: var(--surface-2); }
+.ctx-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ctx-body b { font-weight: 600; line-height: 1.3; }
+.ctx-body p { margin: 0; color: #d4cec4; }
+.ctx-thumb { flex: none; width: 64px; height: 64px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+.ctx-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ctx-thumb.map { width: 72px; height: 72px; background: #fff; }
+.ctx-thumb.map img { object-fit: contain; }
+.ctx-more, .ctx-links a, .ctx-body p a { color: var(--accent-text); text-decoration: none; }
+.ctx-more:hover, .ctx-links a:hover, .ctx-body p a:hover { text-decoration: underline; text-underline-offset: 2px; }
+.ctx-more { align-self: flex-start; margin-top: 2px; }
+.ctx-links { display: flex; gap: 14px; }
+.ctx-src { color: var(--faint); font-size: 12px; }
+.ctx-why { color: var(--faint); font-size: 12px; }
+.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; color: #d4cec4; }
+.ctx-body b.clamp { -webkit-line-clamp: 2; color: var(--text); }
+.ctx-note, .ctx-status { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.ctx-status { display: flex; align-items: center; gap: 8px; }
+.ctx-status .spinner { flex: none; }
+.pager { display: inline-flex; align-items: center; gap: 6px; }
+.pager i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.pager[data-level="green"] i { background: var(--ok); }
+.pager[data-level="yellow"] i { background: var(--warn); }
+.pager[data-level="orange"] i { background: #ff9f43; }
+.pager[data-level="red"] i { background: var(--danger); }
+
 #about h3 { font-size: 14px; font-weight: 650; margin: 18px 0 4px; }
 #about p { margin: 0 0 8px; color: #d4cec4; max-width: 62ch; }
 #about .note { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }

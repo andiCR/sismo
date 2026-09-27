@@ -567,8 +567,90 @@
       <div class="d-actions">
         <button class="btn" data-act="zoom">${T('d.zoom')}</button>
         ${url ? `<a class="btn" data-act="report" href="${esc(url)}" target="_blank" rel="noopener">${T('d.report')}</a>` : ''}
-      </div>`;
+      </div>
+      ${wantsContext(e) ? `<section class="ctx" id="ctx" aria-labelledby="ctxTitle" aria-busy="false">${contextHtml(e)}</section>` : ''}`;
     document.title = `M${fmtMag(e.mag)} · ${placeOf(e)} · Sismo`;
+  }
+
+  // ---------------------------------------------------------------- reports and coverage (js/context.js)
+  // Only quakes people may have felt get reports, witness photos or news.
+  const wantsContext = e => likelyFelt(e) || magOf(e) >= 4.5;
+  const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+  const intensity = v => { const i = Math.max(1, Math.min(12, Math.round(v))); return `${ROMAN[i]} (${T('mmi')[Math.min(i, 10)]})`; };
+  const ctxLink = (kind, url, label, cls = '') => (safeUrl(url)
+    ? `<a class="${cls}" href="${esc(url)}" target="_blank" rel="noopener" data-act="ctx" data-kind="${kind}">${label}</a>` : '');
+
+  function contextHtml(e) {
+    const st = Context.load(e, {
+      inCR: Sources.inShareArea(e), lang: S.lang,
+      onUpdate: () => { if (detailOpen() && S.selectedId === e.id) { const el = $('#ctx'); if (el) { el.innerHTML = contextHtml(e); } } },
+    });
+    const { rsn, usgs, emsc, wiki, news } = st.parts;
+    const official = [];
+
+    if (rsn) {
+      official.push(`<div class="ctx-item">
+        ${rsn.map ? `<a class="ctx-thumb map" href="${esc(rsn.url)}" target="_blank" rel="noopener" data-act="ctx" data-kind="rsn"><img src="${esc(rsn.map)}" alt="${esc(T('ctx.rsn.map'))}" loading="lazy" referrerpolicy="no-referrer"></a>` : ''}
+        <div class="ctx-body">
+          <b>${esc(T('ctx.rsn'))}${rsn.mag ? ` <span class="muted">M${esc(rsn.mag)}</span>` : ''}</b>
+          ${rsn.felt ? `<p><span class="muted">${esc(T('ctx.rsn.felt'))}:</span> ${esc(rsn.felt)}</p>` : ''}
+          ${rsn.where ? `<p class="muted">${esc(rsn.where)}</p>` : ''}
+          ${ctxLink('rsn', rsn.url, esc(T('ctx.open')), 'ctx-more')}
+        </div>
+      </div>`);
+    }
+    if (usgs) {
+      const lines = [];
+      if (usgs.felt) lines.push(esc(T('ctx.dyfi', { n: F.num(usgs.felt) })) + (usgs.cdi ? ` · <span class="muted">${esc(T('ctx.cdi', { i: intensity(usgs.cdi) }))}</span>` : ''));
+      if (usgs.mmi != null) lines.push(esc(T('ctx.mmi', { i: intensity(usgs.mmi) })));
+      if (usgs.pager) lines.push(`<span class="pager" data-level="${esc(usgs.pager)}"><i></i>${esc(T('ctx.pager', { level: usgs.pager }))}</span>`);
+      official.push(`<div class="ctx-item">
+        ${usgs.shakeImg ? `<a class="ctx-thumb map" href="${esc(usgs.url)}" target="_blank" rel="noopener" data-act="ctx" data-kind="usgs"><img src="${esc(usgs.shakeImg)}" alt="ShakeMap" loading="lazy" referrerpolicy="no-referrer"></a>` : ''}
+        <div class="ctx-body">
+          <b>USGS</b>
+          ${lines.map(l => `<p>${l}</p>`).join('')}
+          ${usgs.links.map(l => `<p>${ctxLink('usgs-link', l.url, esc(l.text) + ' ↗')}</p>`).join('')}
+          ${ctxLink('usgs', usgs.url, esc(T('ctx.open')), 'ctx-more')}
+        </div>
+      </div>`);
+    }
+    if (emsc) {
+      official.push(`<div class="ctx-item">
+        <div class="ctx-body">
+          <b>${esc(T('ctx.emsc', { n: F.num(emsc.n) }))}</b>
+          <p class="ctx-links">${ctxLink('emsc-photos', emsc.photos, esc(T('ctx.photos')))}${ctxLink('emsc', emsc.testimonies, esc(T('ctx.testimonies')))}</p>
+        </div>
+      </div>`);
+    }
+
+    const parts = [];
+    if (official.length) parts.push(`<h4>${esc(T('ctx.official'))}</h4>${official.join('')}`);
+    if (wiki) {
+      parts.push(`<h4>Wikipedia</h4>
+        <a class="ctx-item ctx-card" href="${esc(safeUrl(wiki.url) || '#')}" target="_blank" rel="noopener" data-act="ctx" data-kind="wiki" lang="${esc(wiki.lang)}">
+          ${wiki.thumb ? `<span class="ctx-thumb"><img src="${esc(wiki.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>` : ''}
+          <span class="ctx-body"><b>${esc(wiki.title)} ↗</b><span class="clamp">${esc(wiki.extract)}</span></span>
+        </a>`);
+    }
+    if (news) {
+      parts.push(`<h4>${esc(T('ctx.news'))}</h4>
+        ${news.map(a => `<a class="ctx-item ctx-card" href="${esc(safeUrl(a.url) || '#')}" target="_blank" rel="noopener" data-act="ctx" data-kind="news" lang="es">
+          ${a.image && safeUrl(a.image) ? `<span class="ctx-thumb"><img src="${esc(a.image)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>` : ''}
+          <span class="ctx-body">
+            <span class="ctx-src">${esc(a.source)} · ${esc(ago(a.published))}</span>
+            <b class="clamp">${esc(a.title)}</b>
+            <span class="ctx-why">${esc(T('ctx.why', { list: a.why.map(w => T('ctx.why.' + w)).join(', ') }))}</span>
+          </span>
+        </a>`).join('')}
+        <p class="ctx-note">${esc(T('ctx.news.note'))}</p>`);
+    }
+
+    const busy = st.pending > 0;
+    requestAnimationFrame(() => $('#ctx')?.setAttribute('aria-busy', String(busy)));
+    return `<h3 id="ctxTitle">${esc(T('ctx.title'))}</h3>
+      ${parts.join('')}
+      ${busy ? `<p class="ctx-status"><span class="spinner"></span>${esc(T('ctx.loading'))}</p>`
+        : parts.length ? '' : `<p class="ctx-status">${esc(T('ctx.none'))}${Date.now() - e.t < 2 * HOUR ? ' ' + esc(T('ctx.fresh')) : ''}</p>`}`;
   }
 
   // ---------------------------------------------------------------- sharing
@@ -779,6 +861,7 @@
     if (!e) return;
     if (via && id !== S.selectedId) track('open-event', { via, ...evInfo(e), ...extra });
     S.selectedId = id;
+    Context.forgetIfFresh(e);
     map.setFilter('selected', ['==', ['get', 'id'], id]);
     renderDetail(e);
     showView('detail');
@@ -1193,6 +1276,7 @@
     else if (act === 'share' && S.selectedId) shareEvent(S.events.get(S.selectedId));
     else if (act === 'whatsapp' && S.selectedId) track('share', { method: 'whatsapp', ...evInfo(S.events.get(S.selectedId)) });
     else if (act === 'report' && S.selectedId) track('official-report', evInfo(S.events.get(S.selectedId)));
+    else if (act === 'ctx' && S.selectedId) track('context', { kind: el.dataset.kind, ...evInfo(S.events.get(S.selectedId)) });
   });
 
   $('#temblo').addEventListener('click', e => {

@@ -3,9 +3,11 @@
    Worker runs every minute instead: it looks for recent quakes that should have a share page
    (Sources.hasSharePage) but aren't in the deployed e/manifest.json, or whose magnitude changed
    since, and starts the Pages workflow. A build takes about a minute.
-   Without a GITHUB_TOKEN secret it only logs what it would do. */
+   Without a GITHUB_TOKEN secret it only logs what it would do.
+   It also answers GET /news for the app's event detail (news.js). */
 import './window.js';
 import '../../js/sources.js';
+import { handleNews } from './news.js';
 
 const { Sources } = globalThis;
 const EMSC_API = 'https://www.seismicportal.eu/fdsnws/event/1/query';
@@ -18,6 +20,10 @@ const GIVE_UP = 20 * 6e4;
 export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(run(env));
+  },
+  async fetch(request, env, ctx) {
+    if (new URL(request.url).pathname === '/news') return handleNews(request, env, ctx);
+    return new Response('Not found', { status: 404 });
   },
 };
 

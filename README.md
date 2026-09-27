@@ -68,6 +68,24 @@ It also works on any other static host (Netlify, Cloudflare Pages, Vercel). All 
 
 Rough volumes: EMSC has ~570 events/day globally, ~11.5k per 30 days (about 6 MB of JSON). For Costa Rica over 30 days, about 195 events come from OVSICORI and 19 from RSN-UCR.
 
+### Reports and coverage (prototype)
+
+Quakes that were likely felt (or M4.5+) get a "Reports and coverage" section in the detail view (`js/context.js`). Each part loads on its own and is left out when there's nothing:
+
+| Part | Source | How it's matched |
+|---|---|---|
+| RSN-UCR report: where it was felt, intensity map | RSN-UCR RSS feed (last 10 felt quakes); older ones from its list page (`?limit=100`) and the report page. All three allow browser requests | Local time within 2.5 min, and within 80 km when the report has coordinates. Costa Rica area only |
+| "Did You Feel It?" reports and strongest intensity, ShakeMap maximum, PAGER level, linked statements (e.g. tsunami) | USGS event API (`products`) | USGS quakes directly; EMSC quakes M4+ by a search within 90 s and 150 km |
+| Witness reports, with links to EMSC's photo and report pages | EMSC testimonies API | By `unid` for EMSC quakes, by time and distance for USGS ones |
+| Wikipedia article | Wikipedia search, `nearcoord:300km` plus the year, in the page language first | M6+ only |
+| News articles | The Worker's `GET /news` (below) | See below |
+
+**News** (`worker/src/news.js`): Costa Rican news sites send no CORS headers, so the Worker reads their RSS feeds (La Nación, La Teja, El Observador, elmundo.cr, Monumental, Delfino; the WordPress ones through their `?s=sismo` search feeds). An article matches a quake when it mentions a quake word and, in the Costa Rica time (±1 min), a magnitude within 0.3, or a nearby town or region ("Pacífico Sur"). An article published more than 12 h later needs the time, and anything after 36 h is dropped. Each article only goes to the quake it matches best among other M2.5+ quakes within 3° and 36 h, so articles about one quake in a swarm don't show up on its neighbours. Answers are cached for 10 minutes, and each article carries `why` (`time`, `mag`, `place`), which the app shows.
+
+Limits: the feeds only reach back days (La Nación: about one day; the search feeds: a few weeks), so older quakes have no news. Saving matches as articles appear (on the Worker's schedule, into KV) would fix that. CRHoy, Teletica, Repretel, Diario Extra and AM Prensa have no working feed.
+
+The news part is only on locally for now: `NEWS_API` in `js/context.js` points to `http://localhost:8787` on localhost and is `null` elsewhere. To run it, start `npm run dev` in `worker/` next to the site. To turn it on for sismo.cr, give the Worker a public URL (`workers_dev = true` or a route in `wrangler.toml`), deploy it, and set `NEWS_API` to that URL.
+
 ## Features
 
 - Dark basemap (CARTO Dark Matter) with a globe toggle. Free, keyless fallbacks are built in if CARTO's free tier runs out: add `?basemap=openfreemap` or `?basemap=versatiles` to try them, or change the default in `BASEMAPS` in `js/app.js`
@@ -99,6 +117,7 @@ Besides pageviews, `track()` in `js/app.js` sends these events:
 | `replay`, `scrub` | timeline use |
 | `layer`, `color-by`, `globe` | map rail toggles |
 | `source`, `period`, `sort`, `min-mag`, `in-view`, `go-to`, `near-me` | filters and navigation |
+| `context` | a link in "Reports and coverage" was opened: `kind` `rsn`, `usgs`, `usgs-link`, `emsc`, `emsc-photos`, `wiki` or `news`; `mag`, `cr`, `source` |
 | `share-wait` | Share waited for a new quake's card: `outcome` `ready` (with `secs` waited), `skipped` ("Don't wait", with `secs`) or `timeout`; `mag`, `cr`, `source` |
 | `language`, `about`, `load-error` | |
 
@@ -125,8 +144,9 @@ The edit-time design check (hooks) is machine-local: it lives in the gitignored 
 - `js/places.js`: Costa Rican towns, for "25 km al SO de Quepos" descriptions
 - `scripts/share-kit.js`: share-card images (SVG) and share-page templating; runs in Node and in the browser
 - `scripts/build-site.mjs`: builds `_site/` with the share pages (used by the workflow)
-- `worker/`: Cloudflare Worker that starts a build as soon as a new quake needs a share page
+- `worker/`: Cloudflare Worker that starts a build as soon as a new quake needs a share page, and matches news articles to quakes (`GET /news`)
 - `js/sources.js`: data adapters (EMSC and USGS normalized to one event shape) and live feeds
+- `js/context.js`: "Reports and coverage" in the detail view (RSN-UCR, USGS, EMSC witnesses, Wikipedia, news)
 - `js/app.js`: map, layers, list, detail, timeline and replay
 - `serve.ps1`: tiny local static server
 
