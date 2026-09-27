@@ -73,6 +73,8 @@
   const slugToId = slug => slug.replace('-', ':');
   const deepSlug = document.querySelector('meta[name="sismo-event"]')?.content || new URLSearchParams(location.search).get('e');
   const deepId = deepSlug && /^(emsc|usgs)-[\w-]+$/.test(deepSlug) ? slugToId(deepSlug) : null;
+  // How the link was shared (?s=wa|sh|cp, added by shareUrl), since WhatsApp and most apps send no referrer.
+  const deepVia = new URLSearchParams(location.search).get('s');
   try {
     const embedded = JSON.parse(document.getElementById('sismo-event-data')?.textContent || 'null');
     if (embedded && embedded.id === deepId) S.pinned = embedded; // kept even if older than the period
@@ -83,6 +85,14 @@
     const minMag = S.savedMinMag ?? S.minMag; // a shared link's temporary filter isn't remembered
     try { localStorage.setItem('sismo:settings', JSON.stringify({ source, period, minMag, colorBy, inView, sort, globe, layers, lang })); } catch { /* private mode */ }
   }
+
+  // ---------------------------------------------------------------- analytics
+  // Umami (see index.html) loads deferred and only reports on sismo.cr; until then, or when blocked, this does nothing.
+  function track(name, data) {
+    try { window.umami?.track(name, data); } catch { /* never let stats break the app */ }
+  }
+  // Coarse event details: enough to compare, nothing more.
+  const evInfo = e => ({ mag: e.mag == null ? null : Math.floor(e.mag), cr: inCR(e), source: e.id.split(':')[0] });
 
   // ---------------------------------------------------------------- helpers
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -420,6 +430,7 @@
     } catch (err) {
       if (err.name === 'AbortError') return;
       console.error(err);
+      track('load-error', { source: S.source, silent });
       if (!silent) toast(`<div><b>${esc(T('err.load'))}</b><span>${esc(err.message)}. ${esc(T('err.retry'))}</span></div>`, { kind: 'error', timeout: 20000, onClick: () => loadData() });
     } finally {
       if (loadCtl === ctl) setLoading(null);
@@ -535,7 +546,7 @@
       ${alerts.map(t => `<div class="alert">${ICON_WARN}${esc(t)}</div>`).join('')}
       <div class="d-actions d-share">
         <button class="btn primary" data-act="share">${ICON_SHARE}${T('share')}</button>
-        <a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(`${shareText(e)} ${shareUrl(e)}`)}" target="_blank" rel="noopener">${ICON_WA}WhatsApp</a>
+        <a class="btn wa" data-act="whatsapp" href="https://wa.me/?text=${encodeURIComponent(`${shareText(e)} ${shareUrl(e, 'wa')}`)}" target="_blank" rel="noopener">${ICON_WA}WhatsApp</a>
       </div>
       <dl class="d-grid">
         <div><dt>${T('d.yourTime')}</dt><dd>${F.local.format(e.t)}</dd></div>
@@ -552,7 +563,7 @@
       <p class="d-effects"><b>${T('d.effects')}</b> ${effects(e.mag)}${e.depth >= 150 ? ' ' + T('d.deepNote') : ''}</p>
       <div class="d-actions">
         <button class="btn" data-act="zoom">${T('d.zoom')}</button>
-        ${url ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener">${T('d.report')}</a>` : ''}
+        ${url ? `<a class="btn" data-act="report" href="${esc(url)}" target="_blank" rel="noopener">${T('d.report')}</a>` : ''}
       </div>`;
     document.title = `M${fmtMag(e.mag)} · ${placeOf(e)} · Sismo`;
   }
@@ -562,16 +573,22 @@
   const ICON_SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>';
   const ICON_WA = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.4-.2z"/></svg>';
 
-  // Share pages live at <site>/e/<slug>/ (built by scripts/build-site.mjs).
-  const shareUrl = e => new URL(`e/${idToSlug(e.id)}/`, new URL('.', document.baseURI)).href;
+  // Share pages live at <site>/e/<slug>/ (built by scripts/build-site.mjs). `via` tags how it was shared.
+  const shareUrl = (e, via) => new URL(`e/${idToSlug(e.id)}/${via ? `?s=${via}` : ''}`, new URL('.', document.baseURI)).href;
   const shareText = e => `${T('share.text', { mag: fmtMag(e.mag), place: nearOf(e) || placeOf(e) })} (${ago(e.t)})`;
 
   async function shareEvent(e) {
-    const url = shareUrl(e), text = shareText(e);
+    const text = shareText(e);
     // Native share sheet on phones; on desktop just copy the link.
     if (navigator.share && window.matchMedia('(pointer: coarse)').matches) {
-      try { await navigator.share({ title: text, text, url }); return; } catch (err) { if (err.name === 'AbortError') return; }
+      try {
+        await navigator.share({ title: text, text, url: shareUrl(e, 'sh') });
+        track('share', { method: 'native', ...evInfo(e) });
+        return;
+      } catch (err) { if (err.name === 'AbortError') return; }
     }
+    const url = shareUrl(e, 'cp');
+    track('share', { method: 'copy', ...evInfo(e) });
     try {
       await navigator.clipboard.writeText(url);
     } catch {
@@ -583,6 +600,7 @@
 
   // ---------------------------------------------------------------- ¿Tembló? banner
   const CR_BOX = { w: -86.3, e: -82.4, s: 7.8, n: 11.3 };
+  const inCR = e => e.lat >= CR_BOX.s && e.lat <= CR_BOX.n && e.lon >= CR_BOX.w && e.lon <= CR_BOX.e;
   // Rough "people probably felt it" rule; shallow quakes are felt at lower magnitudes.
   const likelyFelt = e => {
     const m = magOf(e), d = e.depth ?? 10;
@@ -595,7 +613,7 @@
     const now = Date.now();
     const inScope = S.userLoc
       ? e => distKm(S.userLoc, e) <= 200
-      : e => e.lat >= CR_BOX.s && e.lat <= CR_BOX.n && e.lon >= CR_BOX.w && e.lon <= CR_BOX.e;
+      : inCR;
     let felt = null, last = null;
     for (const e of S.events.values()) {
       if (now - e.t > DAY || !inScope(e)) continue;
@@ -654,7 +672,7 @@
       toast(`<div><b>${esc(T('deep.adjusted'))}</b><span>${esc(adjusted.join(' · '))}</span></div>`, { timeout: 6000 });
     }
     refreshAll();
-    select(e.id);
+    select(e.id, { via: 'link', extra: { shared: deepVia || 'none' } });
     // Jump rather than fly: the event may be on the other side of the world from the default view.
     map.easeTo({ center: [e.lon, e.lat], zoom: eventZoom(e), offset: centerOffset(), duration: 0 });
   }
@@ -703,9 +721,11 @@
     setMenu($('#rail'), $('#railToggle'), false);
   }
 
-  function select(id, { fly = false } = {}) {
+  // `via` says where the visitor opened it from (list, map, temblo, toast, timeline, link), for stats.
+  function select(id, { fly = false, via = null, extra = null } = {}) {
     const e = S.events.get(id);
     if (!e) return;
+    if (via && id !== S.selectedId) track('open-event', { via, ...evInfo(e), ...extra });
     S.selectedId = id;
     map.setFilter('selected', ['==', ['get', 'id'], id]);
     renderDetail(e);
@@ -741,7 +761,7 @@
   function toastEvent(e) {
     toast(`${magMark(e)}
       <div><b>${esc(T('toast.new'))}</b><span>${esc(placeOf(e))} · ${esc(Sources.agency(e).short)}</span></div>`,
-    { onClick: () => select(e.id, { fly: true }) });
+    { onClick: () => select(e.id, { fly: true, via: 'toast' }) });
   }
 
   // ---------------------------------------------------------------- timeline
@@ -867,7 +887,8 @@
 
   tl.canvas.addEventListener('pointerdown', ev => {
     const hit = hitBig(ev);
-    if (hit) { select(hit.id, { fly: true }); return; }
+    if (hit) { select(hit.id, { fly: true, via: 'timeline' }); return; }
+    track('scrub');
     tl.dragging = true;
     tl.canvas.setPointerCapture(ev.pointerId);
     scrub(ev);
@@ -884,7 +905,8 @@
   new ResizeObserver(() => { computeBins(); drawTimeline(); }).observe(tl.canvas.parentElement);
 
   // ---------------------------------------------------------------- replay
-  function play() {
+  function play({ via } = {}) {
+    if (via) track('replay', { via, period: S.period });
     if (S.cursor == null || S.cursor >= Date.now() - 1000) S.cursor = Date.now() - PERIODS[S.period];
     S.playing = true;
     lastTs = null;
@@ -991,12 +1013,13 @@
 
   $('#langSeg').addEventListener('click', e => {
     const v = e.target.closest('button')?.dataset.v;
-    if (v) setLanguage(v);
+    if (v && v !== S.lang) { track('language', { to: v }); setLanguage(v); }
   });
 
   $('#sourceSeg').addEventListener('click', e => {
     const v = e.target.closest('button')?.dataset.v;
     if (!v || v === S.source) return;
+    track('source', { to: v });
     S.source = v; saveSettings(); syncControls();
     S.events.clear(); closeDetail(); goLive(); refreshAll();
     loadData().then(startLive);
@@ -1005,19 +1028,22 @@
   $('#periodSeg').addEventListener('click', e => {
     const v = e.target.closest('button')?.dataset.v;
     if (!v || v === S.period) return;
+    track('period', { to: v });
     S.period = v; saveSettings(); syncControls();
     goLive(); loadData();
   });
 
   $('#sortSeg').addEventListener('click', e => {
     const v = e.target.closest('button')?.dataset.v;
-    if (!v) return;
+    if (!v || v === S.sort) return;
+    track('sort', { to: v });
     S.sort = v; saveSettings(); syncControls(); renderList();
   });
 
   $('#regions').addEventListener('click', e => {
-    const r = REGIONS[e.target.closest('button')?.dataset.r];
+    const key = e.target.closest('button')?.dataset.r, r = REGIONS[key];
     if (!r) return;
+    track('go-to', { region: key });
     closeMenus(); // on phones, get the menu out of the way of the map
     if (r.bounds) map.fitBounds(r.bounds, { padding: fitPadding(), duration: 1400 });
     else map.flyTo({ center: r.center, zoom: r.zoom, duration: 1400 });
@@ -1030,6 +1056,7 @@
       return;
     }
     navigator.geolocation.getCurrentPosition(pos => {
+      track('near-me', { ok: true });
       S.userLoc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
       const el = document.createElement('div'); el.className = 'me';
       meMarker?.remove();
@@ -1037,7 +1064,10 @@
       map.flyTo({ center: [S.userLoc.lon, S.userLoc.lat], zoom: 7.5 });
       renderTemblo();
       renderList();
-    }, err => toast(`<div><b>${esc(T('geo.failed'))}</b><span>${esc(err.message)}</span></div>`, { kind: 'error' }),
+    }, err => {
+      track('near-me', { ok: false });
+      toast(`<div><b>${esc(T('geo.failed'))}</b><span>${esc(err.message)}</span></div>`, { kind: 'error' });
+    },
     { enableHighAccuracy: false, timeout: 10000 });
   });
 
@@ -1048,10 +1078,11 @@
     $('#minMagOut').textContent = S.minMag > 0 ? `M${S.minMag.toFixed(1)}+` : T('all');
     styleFrame(); renderListThrottled();
   });
-  minMagInput.addEventListener('change', () => { saveSettings(); refreshAll(); });
+  minMagInput.addEventListener('change', () => { track('min-mag', { to: S.minMag }); saveSettings(); refreshAll(); });
 
   $('#inView').addEventListener('change', e => {
     S.inView = e.target.checked; saveSettings();
+    track('in-view', { on: S.inView });
     renderList(); computeBins(); drawTimeline();
   });
 
@@ -1071,20 +1102,23 @@
     if (!b || b.id === 'railToggle') return;
     if (b.dataset.layer) {
       S.layers[b.dataset.layer] = !S.layers[b.dataset.layer];
+      track('layer', { layer: b.dataset.layer, on: S.layers[b.dataset.layer] });
       applyLayerVisibility();
     } else if (b.dataset.color) {
+      if (b.dataset.color !== S.colorBy) track('color-by', { to: b.dataset.color });
       S.colorBy = b.dataset.color;
       styleFrame(); renderList(); drawTimeline();
       if (detailOpen()) renderDetail(S.events.get(S.selectedId));
     } else if (b.id === 'globeBtn') {
       S.globe = !S.globe;
+      track('globe', { on: S.globe });
       map.setProjection({ type: S.globe ? 'globe' : 'mercator' });
       if (S.globe && map.getZoom() > 3) map.easeTo({ zoom: 2.2, duration: 1200 });
     }
     saveSettings(); syncControls();
   });
 
-  $('#playBtn').addEventListener('click', () => (S.playing ? pause() : play()));
+  $('#playBtn').addEventListener('click', () => (S.playing ? pause() : play({ via: 'button' })));
   $('#liveBtn').addEventListener('click', goLive);
   $('#speedBtn').addEventListener('click', () => {
     const speeds = [1, 2, 4, 0.5];
@@ -1094,7 +1128,7 @@
 
   $('#list').addEventListener('click', e => {
     const id = e.target.closest('.ev')?.dataset.id;
-    if (id) select(id, { fly: true });
+    if (id) select(id, { fly: true, via: 'list' });
   });
 
   $('#panel').addEventListener('click', e => {
@@ -1102,22 +1136,28 @@
     if (act === 'back') closeDetail();
     else if (act === 'zoom' && S.selectedId) flyToEvent(S.events.get(S.selectedId));
     else if (act === 'share' && S.selectedId) shareEvent(S.events.get(S.selectedId));
+    else if (act === 'whatsapp' && S.selectedId) track('share', { method: 'whatsapp', ...evInfo(S.events.get(S.selectedId)) });
+    else if (act === 'report' && S.selectedId) track('official-report', evInfo(S.events.get(S.selectedId)));
   });
 
   $('#temblo').addEventListener('click', e => {
     e.stopPropagation(); // don't toggle the mobile sheet
-    const id = $('#temblo').dataset.id;
-    if (id) select(id, { fly: true });
+    const { id, state } = $('#temblo').dataset;
+    if (id) select(id, { fly: true, via: 'temblo', extra: { state } });
   });
 
-  $('#aboutBtn').addEventListener('click', () => showView($('#panel').dataset.view === 'about' ? 'list' : 'about'));
+  $('#aboutBtn').addEventListener('click', () => {
+    const open = $('#panel').dataset.view !== 'about';
+    if (open) track('about');
+    showView(open ? 'about' : 'list');
+  });
   $('.panel-head').addEventListener('click', e => {
     if (window.matchMedia('(max-width: 760px)').matches && !e.target.closest('a')) $('#panel').classList.toggle('collapsed');
   });
 
   document.addEventListener('keydown', e => {
     if (e.target.closest('input, textarea')) return;
-    if (e.code === 'Space') { e.preventDefault(); S.playing ? pause() : play(); }
+    if (e.code === 'Space') { e.preventDefault(); S.playing ? pause() : play({ via: 'key' }); }
     else if (e.key === 'Escape') closeDetail();
   });
 
@@ -1148,7 +1188,7 @@
     const p = ev.point;
     const box = [[p.x - 5, p.y - 5], [p.x + 5, p.y + 5]];
     const q = map.queryRenderedFeatures(box, { layers: ['quakes'] });
-    if (q.length) { select(q[0].properties.id); return; }
+    if (q.length) { select(q[0].properties.id, { via: 'map' }); return; }
     const v = map.queryRenderedFeatures(box, { layers: ['volcanoes'] });
     if (v.length) {
       new maplibregl.Popup({ className: 'hover', offset: 10, closeButton: false })

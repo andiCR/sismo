@@ -61,6 +61,24 @@ Rough volumes: EMSC has ~570 events/day globally, ~11.5k per 30 days (about 6 MB
 - Responsive: bottom sheet and icon rail on phones
 - **Spanish and English**: ES/EN switch in the header. The default follows the browser language; `?lang=es` or `?lang=en` forces one, and the choice is remembered. Place names from EMSC and USGS are translated too ("Off Coast of Costa Rica" becomes "Frente a la costa de Costa Rica", "8 km W of David, Panama" becomes "8 km al O de David, Panamá")
 
+## Analytics
+
+Usage stats go to [Umami Cloud](https://cloud.umami.is/analytics/us/websites/3d7b4647-5ff4-424c-b102-b22a29b96488): no cookies, no personal data, and nothing is sent except from `sismo.cr` (so local runs don't count). The URL hash is ignored, because MapLibre rewrites it on every pan and each change would otherwise count as a pageview. The About panel tells visitors this.
+
+Besides pageviews, `track()` in `js/app.js` sends these events:
+
+| Event | Data |
+|---|---|
+| `open-event` | `via`: `list`, `map`, `temblo` (plus banner `state`), `toast`, `timeline` or `link` (plus `shared`, see below); `mag` (rounded down), `cr`, `source` |
+| `share` | `method`: `native`, `copy` or `whatsapp`; `mag`, `cr`, `source` |
+| `official-report` | the agency link in the detail view was opened |
+| `replay`, `scrub` | timeline use |
+| `layer`, `color-by`, `globe` | map rail toggles |
+| `source`, `period`, `sort`, `min-mag`, `in-view`, `go-to`, `near-me` | filters and navigation |
+| `language`, `about`, `load-error` | |
+
+Share links carry `?s=wa` (WhatsApp button), `?s=sh` (native share sheet) or `?s=cp` (copied link), because WhatsApp and most apps send no referrer. A visitor arriving through one reports it as `open-event` with `via: link` and `shared: wa|sh|cp|none`.
+
 ## Design guidance (Impeccable)
 
 UI work with AI agents follows [Impeccable](https://impeccable.style) (skill v4.3.1), vendored in `.claude/skills/impeccable/` with its agents in `.claude/agents/`. `PRODUCT.md` records who the site is for and what design must never compromise (for example, it must never look like an official alert service). Use `/impeccable` in Claude Code for its commands (`critique`, `audit`, `polish`, …).

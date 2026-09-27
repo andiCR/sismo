@@ -116,7 +116,7 @@ await fs.writeFile(path.join(OUT, '404.html'), `<!doctype html>
 <script>
   (function () {
     var p = location.pathname, i = p.indexOf('/e/');
-    if (i >= 0) location.replace(p.slice(0, i + 1) + '?e=' + encodeURIComponent(p.slice(i + 3).split('/')[0]) + location.hash);
+    if (i >= 0) location.replace(p.slice(0, i + 1) + '?e=' + encodeURIComponent(p.slice(i + 3).split('/')[0]) + location.search.replace(/^\\?/, '&') + location.hash);
   })();
 </script>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f0e0d;color:#ece7df;font:16px Archivo,system-ui,sans-serif}a{color:#ff9a76;text-underline-offset:2px}</style>
