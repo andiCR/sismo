@@ -1,6 +1,6 @@
 /* Seismic data sources.
    Every source is normalised to one event shape:
-   { id, lat, lon, depth, mag, magType, t, place, auth, evtype, url, source, felt?, alert?, tsunami? } */
+   { id, lat, lon, depth, mag, magType, t, updated?, place, auth, evtype, url, source, felt?, alert?, tsunami? } */
 window.Sources = (() => {
   'use strict';
 
@@ -55,6 +55,7 @@ window.Sources = (() => {
       lat: p.lat, lon: p.lon, depth: p.depth,
       mag: p.mag ?? null, magType: p.magtype || 'm',
       t: Date.parse(p.time),
+      updated: Date.parse(p.lastupdate) || undefined,
       place: titleCase(p.flynn_region),
       auth: (p.auth || '').toUpperCase(),
       evtype: EVTYPES[p.evtype] || 'earthquake',
@@ -70,6 +71,7 @@ window.Sources = (() => {
       lat: c[1], lon: c[0], depth: c[2],
       mag: p.mag ?? null, magType: p.magType || 'm',
       t: p.time,
+      updated: p.updated,
       place: p.place || p.title || 'Unknown location',
       auth: (p.net || '').toUpperCase(),
       evtype: (p.type || 'earthquake').toLowerCase(),
@@ -162,5 +164,13 @@ window.Sources = (() => {
     };
   }
 
-  return { fetchRecent, fetchEvent, live, agency };
+  /* Quakes that get a share page with a preview card (scripts/build-site.mjs): Costa Rica and its
+     surroundings at M2.5+, anywhere at M5+. Also used by the app (Share waits for the card) and
+     the build trigger (worker/). Slugs are app ids with ':' → '-', e.g. emsc-20260925_0000078. */
+  const SHARE_AREA = { w: -87.5, e: -82, s: 7, n: 12 };
+  const inShareArea = e => e.lat >= SHARE_AREA.s && e.lat <= SHARE_AREA.n && e.lon >= SHARE_AREA.w && e.lon <= SHARE_AREA.e;
+  const shareSlug = e => e.id.replace(':', '-');
+  const hasSharePage = e => ((e.mag ?? 0) >= 5 || (inShareArea(e) && (e.mag ?? 0) >= 2.5)) && /^[\w-]+$/.test(shareSlug(e));
+
+  return { fetchRecent, fetchEvent, live, agency, fromEmsc, fromUsgs, SHARE_AREA, inShareArea, shareSlug, hasSharePage };
 })();

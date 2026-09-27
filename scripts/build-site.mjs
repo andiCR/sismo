@@ -2,6 +2,8 @@
    - the static app (index.html, css/, js/)
    - a share page per recent quake at e/<id>/ with Open Graph tags and a 1200×630 preview image,
      so links shared on WhatsApp, X, Telegram… show a proper card
+   - e/manifest.json: which share pages exist and when their data was fetched, read by the build
+     trigger (worker/) and by the app's Share button
    - a site-wide preview image, 404.html (sends unknown e/<id>/ links into the app), sitemap.xml, robots.txt
    Runs in GitHub Actions (see .github/workflows/pages.yml). Usage: SITE_URL=https://example.org/ node scripts/build-site.mjs */
 import fs from 'node:fs/promises';
@@ -17,7 +19,6 @@ const SITE_URL = (process.env.SITE_URL || 'https://sismo.cr/').replace(/\/*$/, '
 const LANG = process.env.SITE_LANG || 'es'; // share cards target Costa Rican WhatsApp groups
 const DAY = 864e5;
 const MAX_PAGES = 800;
-const CR = { w: -87.5, e: -82, s: 7, n: 12 };
 
 const LAND_URL = 'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson';
 const PLATES_URL = 'https://cdn.jsdelivr.net/gh/fraxen/tectonicplates@master/GeoJSON/PB2002_boundaries.json';
@@ -61,13 +62,20 @@ await fs.mkdir(OUT, { recursive: true });
 for (const p of ['index.html', 'css', 'js']) await fs.cp(path.join(ROOT, p), path.join(OUT, p), { recursive: true });
 
 // Data failures are not fatal: the app itself still deploys, just with fewer share pages.
-const [emsc, usgs, land, plates, fonts] = await Promise.all([
+// USGS refreshes its month feed only every 15 minutes, so the day feed (refreshed every minute)
+// is merged in for the newest quakes and revisions.
+const fetchedAt = Date.now();
+const [emsc, usgsMonth, usgsDay, land, plates, fonts] = await Promise.all([
   attempt('EMSC', () => Sources.fetchRecent('EMSC', 30 * DAY), []),
   attempt('USGS', () => Sources.fetchRecent('USGS', 30 * DAY), []),
+  attempt('USGS day', () => Sources.fetchRecent('USGS', DAY), []),
   attempt('land', async () => ShareKit.prepare(await (await fetchOk(LAND_URL)).json()), []),
   attempt('plates', async () => ShareKit.prepare(await (await fetchOk(PLATES_URL)).json()), []),
   attempt('fonts', fontFiles, []),
 ]);
+const usgsById = new Map(usgsMonth.map(e => [e.id, e]));
+for (const e of usgsDay) if (!(usgsById.get(e.id)?.updated > e.updated)) usgsById.set(e.id, e);
+const usgs = [...usgsById.values()];
 const geo = { land, plates };
 const siteLabel = SITE_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
@@ -76,18 +84,17 @@ const render = svg => new Resvg(svg, {
 }).render().asPng();
 
 // Pages for Costa Rica and its surroundings (M2.5+) and significant quakes anywhere (M5+).
-const inCR = e => e.lat >= CR.s && e.lat <= CR.n && e.lon >= CR.w && e.lon <= CR.e;
 const wanted = [...emsc, ...usgs]
-  .filter(e => (e.mag ?? 0) >= 5 || (inCR(e) && (e.mag ?? 0) >= 2.5))
+  .filter(Sources.hasSharePage)
   .sort((a, b) => b.t - a.t)
   .slice(0, MAX_PAGES);
 
 const indexSrc = await fs.readFile(path.join(ROOT, 'index.html'), 'utf8');
 const sitemap = [];
+const manifest = { fetchedAt, pages: {} }; // slug → magnitude shown on the card
 let pages = 0;
 for (const e of wanted) {
-  const slug = e.id.replace(':', '-');
-  if (!/^[\w-]+$/.test(slug)) continue;
+  const slug = Sources.shareSlug(e);
   const url = `${SITE_URL}e/${slug}/`;
   const d = ShareKit.describe(e);
   const dir = path.join(OUT, 'e', slug);
@@ -97,13 +104,14 @@ for (const e of wanted) {
     lang: LANG, title: d.title, description: d.description, url, image: `${url}og.png`,
     base: '../../', slug, event: e,
   }));
+  manifest.pages[slug] = e.mag == null ? null : Math.round(e.mag * 10) / 10;
   sitemap.push(`<url><loc>${url}</loc><lastmod>${new Date(e.t).toISOString()}</lastmod></url>`);
   pages++;
 }
 
 // Home page with site-wide preview.
 const T = I18N.t;
-await fs.writeFile(path.join(OUT, 'og.png'), render(ShareKit.siteSVG(emsc.filter(inCR), geo, siteLabel)));
+await fs.writeFile(path.join(OUT, 'og.png'), render(ShareKit.siteSVG(emsc.filter(Sources.inShareArea), geo, siteLabel)));
 await fs.writeFile(path.join(OUT, 'index.html'), ShareKit.pageHtml(indexSrc, {
   lang: LANG, title: T('meta.title'), description: T('meta.desc'), url: SITE_URL, image: `${SITE_URL}og.png`,
 }));
@@ -122,6 +130,9 @@ await fs.writeFile(path.join(OUT, '404.html'), `<!doctype html>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f0e0d;color:#ece7df;font:16px Archivo,system-ui,sans-serif}a{color:#ff9a76;text-underline-offset:2px}</style>
 </head><body><p>${LANG === 'es' ? 'Página no encontrada.' : 'Page not found.'} <a href="${basePath}">${LANG === 'es' ? 'Ir al mapa' : 'Go to the map'}</a></p></body></html>
 `);
+
+await fs.mkdir(path.join(OUT, 'e'), { recursive: true });
+await fs.writeFile(path.join(OUT, 'e', 'manifest.json'), JSON.stringify(manifest));
 
 await fs.writeFile(path.join(OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

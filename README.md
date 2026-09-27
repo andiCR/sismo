@@ -18,7 +18,7 @@ Then open http://localhost:5173. Any static server works; `serve.ps1` exists bec
 The site is published with **GitHub Pages** by the workflow in `.github/workflows/pages.yml`. It runs on every push to `main` and every 10 minutes (GitHub sometimes starts scheduled runs a few minutes late). Each run:
 
 1. copies the app (`index.html`, `css/`, `js/`) into `_site/`
-2. runs `scripts/build-site.mjs`, which creates a **share page for each recent quake** at `e/<id>/` (Costa Rica area M2.5+, anywhere M5+, last 30 days), each with Open Graph tags and a 1200×630 preview image, so links shared on WhatsApp, X or Telegram show a proper card
+2. runs `scripts/build-site.mjs`, which creates a **share page for each recent quake** at `e/<id>/` (Costa Rica area M2.5+, anywhere M5+, last 30 days; the rule is `Sources.hasSharePage` in `js/sources.js`), each with Open Graph tags and a 1200×630 preview image, so links shared on WhatsApp, X or Telegram show a proper card. It also writes `e/manifest.json`, listing the pages and the magnitude on each card
 3. deploys `_site/` to Pages
 
 The build needs Node 20+ and has one dependency (`@resvg/resvg-js`, for SVG to PNG):
@@ -30,7 +30,28 @@ npm run build
 
 Share links (`/e/<id>/`) work immediately, even before the next build creates the page: `404.html` sends them into the app, which fetches the event directly. Only the preview card waits for the build. The card text is in Spanish (`SITE_LANG=en` changes it).
 
-If the repository has no activity for 60 days, GitHub pauses the 10-minute schedule; re-enable it under the Actions tab.
+### Build trigger (new quakes get a card within a couple of minutes)
+
+GitHub's scheduled runs are unreliable (often 20–40 minutes apart), so a small **Cloudflare Worker** in `worker/` runs every minute. It checks EMSC and USGS for quakes from the last 6 hours that should have a share page but aren't in the deployed `e/manifest.json` (or whose magnitude has changed). If it finds one and no build is running, it starts the Pages workflow. A build takes about a minute, so a new quake's card is usually live 1–2 minutes after the quake appears in the app. If a build still has no page for a quake 20 minutes after the quake's last update, the Worker stops asking and leaves it to the scheduled builds.
+
+Meanwhile, the app's Share and WhatsApp buttons wait for the card: for a recent quake that gets a page, the detail view checks for `e/<id>/og.png` every 15 s and shows "Preparing the preview image" until it exists, for at most 5 minutes. "Don't wait" shares without the card. A link shared too early shows no card, and some apps (Telegram, X, Facebook) cache that. This only happens on the built site; locally, Share never waits.
+
+Setup (once; it runs on the Workers free plan):
+
+1. Create a GitHub [fine-grained token](https://github.com/settings/personal-access-tokens/new) with access to only this repository and one permission: **Actions: Read and write**. Note its expiry date; the Worker logs `GitHub 401` once it expires.
+2. Deploy the Worker and give it the token:
+
+   ```bash
+   cd worker
+   npm install
+   npx wrangler login
+   npm run deploy
+   npx wrangler secret put GITHUB_TOKEN
+   ```
+
+Site URL, repository and workflow are set in `worker/wrangler.toml`. `npm run logs` streams the Worker's logs (they are also in the Cloudflare dashboard). To try it locally, run `npm run dev` and open `http://localhost:8787/__scheduled`. Without a token it only logs what it would start.
+
+If the repository has no activity for 60 days, GitHub pauses the 10-minute schedule; re-enable it under the Actions tab. Builds started by the Worker are not affected.
 
 It also works on any other static host (Netlify, Cloudflare Pages, Vercel). All data is fetched directly by the browser, and every source sends `Access-Control-Allow-Origin: *`.
 
@@ -75,6 +96,7 @@ Besides pageviews, `track()` in `js/app.js` sends these events:
 | `replay`, `scrub` | timeline use |
 | `layer`, `color-by`, `globe` | map rail toggles |
 | `source`, `period`, `sort`, `min-mag`, `in-view`, `go-to`, `near-me` | filters and navigation |
+| `share-wait` | Share waited for a new quake's card: `outcome` `ready` (with `secs` waited), `skipped` ("Don't wait", with `secs`) or `timeout`; `mag`, `cr`, `source` |
 | `language`, `about`, `load-error` | |
 
 Share links carry `?s=wa` (WhatsApp button), `?s=sh` (native share sheet) or `?s=cp` (copied link), because WhatsApp and most apps send no referrer. A visitor arriving through one reports it as `open-event` with `via: link` and `shared: wa|sh|cp|none`.
@@ -100,6 +122,7 @@ The edit-time design check (hooks) is machine-local: it lives in the gitignored 
 - `js/places.js`: Costa Rican towns, for "25 km al SO de Quepos" descriptions
 - `scripts/share-kit.js`: share-card images (SVG) and share-page templating; runs in Node and in the browser
 - `scripts/build-site.mjs`: builds `_site/` with the share pages (used by the workflow)
+- `worker/`: Cloudflare Worker that starts a build as soon as a new quake needs a share page
 - `js/sources.js`: data adapters (EMSC and USGS normalized to one event shape) and live feeds
 - `js/app.js`: map, layers, list, detail, timeline and replay
 - `serve.ps1`: tiny local static server

@@ -528,6 +528,8 @@
     const nearbyEvents = nearby(e);
     const url = safeUrl(e.url);
     const inCR = userTZ === 'America/Costa_Rica';
+    const waiting = shareWaiting(e);
+    watchSharePage(e);
     const alerts = [];
     if (e.tsunami) alerts.push(T('alert.tsunami'));
     if (e.alert && e.alert !== 'green') alerts.push(T('alert.pager', { level: e.alert }));
@@ -544,10 +546,11 @@
         <p>${ago(e.t)}${e.evtype !== 'earthquake' ? ` · ${esc(I18N.evtype(e.evtype))}` : ''}</p>
       </div>
       ${alerts.map(t => `<div class="alert">${ICON_WARN}${esc(t)}</div>`).join('')}
-      <div class="d-actions d-share">
-        <button class="btn primary" data-act="share">${ICON_SHARE}${T('share')}</button>
-        <a class="btn wa" data-act="whatsapp" href="https://wa.me/?text=${encodeURIComponent(`${shareText(e)} ${shareUrl(e, 'wa')}`)}" target="_blank" rel="noopener">${ICON_WA}WhatsApp</a>
+      <div class="d-actions d-share"${waiting ? ' aria-busy="true"' : ''}>
+        <button class="btn primary" data-act="share"${waiting ? ' disabled' : ''}>${ICON_SHARE}${T('share')}</button>
+        <a class="btn wa" data-act="whatsapp" href="https://wa.me/?text=${encodeURIComponent(`${shareText(e)} ${shareUrl(e, 'wa')}`)}" target="_blank" rel="noopener"${waiting ? ' aria-disabled="true" tabindex="-1"' : ''}>${ICON_WA}WhatsApp</a>
       </div>
+      ${waiting ? `<p class="d-share-wait" role="status"><span class="spinner"></span>${esc(T('share.preparing'))}<button data-act="share-now">${esc(T('share.dontWait'))}</button></p>` : ''}
       <dl class="d-grid">
         <div><dt>${T('d.yourTime')}</dt><dd>${F.local.format(e.t)}</dd></div>
         <div><dt>${T(inCR ? 'd.utc' : 'd.crTime')}</dt><dd>${(inCR ? F.utc : F.cr).format(e.t)}</dd></div>
@@ -574,7 +577,8 @@
   const ICON_WA = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.4-.2z"/></svg>';
 
   // Share pages live at <site>/e/<slug>/ (built by scripts/build-site.mjs). `via` tags how it was shared.
-  const shareUrl = (e, via) => new URL(`e/${idToSlug(e.id)}/${via ? `?s=${via}` : ''}`, new URL('.', document.baseURI)).href;
+  const pageUrl = e => new URL(`e/${idToSlug(e.id)}/`, new URL('.', document.baseURI)).href;
+  const shareUrl = (e, via) => pageUrl(e) + (via ? `?s=${via}` : '');
   const shareText = e => `${T('share.text', { mag: fmtMag(e.mag), place: nearOf(e) || placeOf(e) })} (${ago(e.t)})`;
 
   async function shareEvent(e) {
@@ -596,6 +600,54 @@
       document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove();
     }
     toast(`<div><b>${esc(T('share.copied'))}</b><span>${esc(url)}</span></div>`, { timeout: 5000 });
+  }
+
+  /* A new quake's share page and preview card go live a minute or two after it reaches the feeds
+     (worker/ starts the build). A link shared before that shows no card, and some apps cache that,
+     so Share waits for the page, at most SHARE_WAIT. Only on the built site (its pages carry
+     og:image tags) and only for recent quakes that get a page. */
+  const SHARE_WAIT = 5 * 60e3, SHARE_POLL = 15e3;
+  const builtSite = !!document.querySelector('meta[property="og:image"]');
+  const pageLive = new Set();       // ids whose share page is up
+  const pageWaitSince = new Map();  // id → when Share started waiting for its page
+  let pageCheck = null;             // { id, timer } while checking the open quake
+
+  const shareWaiting = e => !pageLive.has(e.id) && pageWaitSince.has(e.id) && Date.now() - pageWaitSince.get(e.id) < SHARE_WAIT;
+
+  function watchSharePage(e) {
+    if (pageCheck?.id === e.id) return;
+    clearTimeout(pageCheck?.timer);
+    pageCheck = null;
+    if (!builtSite || pageLive.has(e.id) || !Sources.hasSharePage(e) || Date.now() - e.t > 3 * HOUR) return;
+    if (pageWaitSince.has(e.id) && !shareWaiting(e)) return; // already gave up on it
+    const check = async () => {
+      let live = true; // unless the page is clearly missing, don't hold Share back
+      try { live = (await fetch(`${pageUrl(e)}og.png`, { method: 'HEAD', cache: 'no-store' })).status !== 404; } catch { /* offline */ }
+      if (pageCheck?.id !== e.id) return;
+      if (!detailOpen() || S.selectedId !== e.id) { pageCheck = null; return; } // closed: check again when reopened
+      const was = shareWaiting(e), since = pageWaitSince.get(e.id);
+      if (live) {
+        pageLive.add(e.id);
+        if (since) track('share-wait', { outcome: 'ready', secs: Math.round((Date.now() - since) / 1000), ...evInfo(e) });
+      } else if (!since) {
+        pageWaitSince.set(e.id, Date.now());
+      } else if (!was) {
+        track('share-wait', { outcome: 'timeout', ...evInfo(e) });
+      }
+      const waiting = shareWaiting(e);
+      pageCheck = waiting ? { id: e.id, timer: setTimeout(check, SHARE_POLL) } : null;
+      if (waiting !== was) renderDetail(e);
+    };
+    pageCheck = { id: e.id, timer: setTimeout(check, 0) };
+  }
+
+  function stopWaitingForPage(e) {
+    if (!shareWaiting(e)) return;
+    track('share-wait', { outcome: 'skipped', secs: Math.round((Date.now() - pageWaitSince.get(e.id)) / 1000), ...evInfo(e) });
+    pageWaitSince.set(e.id, -Infinity);
+    clearTimeout(pageCheck?.timer);
+    pageCheck = null;
+    renderDetail(e);
   }
 
   // ---------------------------------------------------------------- ¿Tembló? banner
@@ -1132,8 +1184,11 @@
   });
 
   $('#panel').addEventListener('click', e => {
-    const act = e.target.closest('[data-act]')?.dataset.act;
+    const el = e.target.closest('[data-act]');
+    if (el?.disabled || el?.getAttribute('aria-disabled') === 'true') { e.preventDefault(); return; }
+    const act = el?.dataset.act;
     if (act === 'back') closeDetail();
+    else if (act === 'share-now' && S.selectedId) stopWaitingForPage(S.events.get(S.selectedId));
     else if (act === 'zoom' && S.selectedId) flyToEvent(S.events.get(S.selectedId));
     else if (act === 'share' && S.selectedId) shareEvent(S.events.get(S.selectedId));
     else if (act === 'whatsapp' && S.selectedId) track('share', { method: 'whatsapp', ...evInfo(S.events.get(S.selectedId)) });

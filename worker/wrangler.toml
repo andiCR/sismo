@@ -1,0 +1,18 @@
+# Build trigger for the share pages (see src/index.js and the README's "Deploy" section).
+# Secret, not in this file: GITHUB_TOKEN (`npx wrangler secret put GITHUB_TOKEN`).
+name = "sismo-build-trigger"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = false # no public URL: it only runs on the schedule
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+SITE_URL = "https://sismo.cr/"
+GITHUB_REPO = "andiCR/sismo"
+GITHUB_WORKFLOW = "pages.yml"
+GITHUB_REF = "main"
+
+[observability]
+enabled = true

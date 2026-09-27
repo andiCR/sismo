@@ -266,6 +266,11 @@ input[type="range"] { width: 100%; margin: 4px 0; accent-color: var(--accent); b
 .btn.wa:hover { background: rgba(95, 211, 141, 0.1); border-color: rgba(95, 211, 141, 0.5); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .btn.primary:hover { background: #ff7d55; border-color: #ff7d55; }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: 0.45; pointer-events: none; }
+/* Share waits for a new quake's preview card (a minute or two after it's in the feeds) */
+.d-share-wait { display: flex; align-items: center; gap: 8px; margin: -6px 0 16px; color: var(--muted); font-size: 12px; }
+.d-share-wait .spinner { flex: none; }
+.d-share-wait button { flex: none; margin-left: auto; color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; }
 
 #about h3 { font-size: 14px; font-weight: 650; margin: 18px 0 4px; }
 #about p { margin: 0 0 8px; color: #d4cec4; max-width: 62ch; }

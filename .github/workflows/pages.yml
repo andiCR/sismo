@@ -1,7 +1,8 @@
 name: Build and deploy site
 
-# Rebuilds on every push, and every 10 minutes so share pages exist for new quakes.
-# (GitHub may start scheduled runs a few minutes late under load.)
+# Rebuilds on every push and every 10 minutes (GitHub often starts scheduled runs late, 20–40
+# minutes apart). New quakes don't wait for that: the worker in worker/ checks every minute and
+# starts this workflow (workflow_dispatch) as soon as a quake needs a share page.
 on:
   push:
     branches: [main]
