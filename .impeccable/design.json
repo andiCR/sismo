@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-27T01:30:00Z",
+  "title": "Design System: Sismo",
+  "extensions": {
+    "colorMeta": {
+      "trace-orange": { "role": "primary", "displayName": "Trace Orange", "canonical": "oklch(0.704 0.192 37.1)", "tonalRamp": ["#3d0000", "#630000", "#890000", "#af1600", "#da4713", "#ff6f42", "#ff976a", "#ffbc8d"] },
+      "trace-orange-hover": { "role": "primary", "displayName": "Trace Orange (hover)" },
+      "trace-orange-text": { "role": "primary", "displayName": "Trace Orange Text" },
+      "trace-orange-ink": { "role": "primary", "displayName": "Trace Ink" },
+      "station-floor": { "role": "neutral", "displayName": "Station Floor", "canonical": "oklch(0.165 0.003 67.5)", "tonalRamp": ["#0c0b0a", "#252423", "#413f3e", "#5f5d5c", "#81807e", "#a6a4a3", "#cccac9", "#f0eeed"] },
+      "drum-black": { "role": "neutral", "displayName": "Drum Black", "canonical": "oklch(0.187 0.004 84.5)", "tonalRamp": ["#0c0b09", "#252422", "#41403d", "#5f5d5b", "#81807d", "#a6a4a2", "#cccac7", "#f0eeeb"] },
+      "drum-black-raised": { "role": "neutral", "displayName": "Drum Black Raised" },
+      "drum-black-selected": { "role": "neutral", "displayName": "Drum Black Selected" },
+      "chart-ink": { "role": "neutral", "displayName": "Chart Ink", "canonical": "oklch(0.930 0.012 79.6)", "tonalRamp": ["#0e0b06", "#27231e", "#433f39", "#615d56", "#848078", "#a9a49c", "#cfcac2", "#f3eee6"] },
+      "chart-ink-soft": { "role": "neutral", "displayName": "Chart Ink Soft" },
+      "graphite": { "role": "neutral", "displayName": "Graphite", "canonical": "oklch(0.696 0.018 79.2)", "tonalRamp": ["#0f0a04", "#29231a", "#453f35", "#635d53", "#867f75", "#aba498", "#d1c9be", "#f5ede2"] },
+      "graphite-faint": { "role": "neutral", "displayName": "Graphite Faint" },
+      "hairline": { "role": "neutral", "displayName": "Hairline" },
+      "hairline-strong": { "role": "neutral", "displayName": "Hairline Strong" },
+      "field-green": { "role": "status", "displayName": "Field Green", "canonical": "oklch(0.782 0.146 154.5)", "tonalRamp": ["#001700", "#003500", "#005415", "#007435", "#0f9957", "#49bf7a", "#73e69f", "#99ffc2"] },
+      "amber-replay": { "role": "status", "displayName": "Amber Replay", "canonical": "oklch(0.834 0.141 85.4)", "tonalRamp": ["#230000", "#411600", "#603500", "#815400", "#a67800", "#cc9d1c", "#f4c350", "#ffe777"] },
+      "fault-red": { "role": "status", "displayName": "Fault Red", "canonical": "oklch(0.712 0.181 22.8)", "tonalRamp": ["#3b0000", "#610000", "#860005", "#ad1628", "#d7464a", "#ff6e6e", "#ff9592", "#ffb9b5"] },
+      "plate-boundary": { "role": "data", "displayName": "Plate Boundary" },
+      "depth-0km": { "role": "data", "displayName": "Depth 0 km" },
+      "depth-10km": { "role": "data", "displayName": "Depth 10 km" },
+      "depth-35km": { "role": "data", "displayName": "Depth 35 km" },
+      "depth-70km": { "role": "data", "displayName": "Depth 70 km" },
+      "depth-150km": { "role": "data", "displayName": "Depth 150 km" },
+      "depth-300km": { "role": "data", "displayName": "Depth 300 km" },
+      "depth-700km": { "role": "data", "displayName": "Depth 700 km" }
+    },
+    "typographyMeta": {
+      "wordmark": { "displayName": "Wordmark", "purpose": "\"Sismo\" only; Archivo expanded (wdth 118)." },
+      "figure-display": { "displayName": "Figure Display", "purpose": "Magnitude in the quake detail; condensed tabular figures." },
+      "figure-headline": { "displayName": "Figure Headline", "purpose": "Magnitude in the ¿Tembló? heading." },
+      "figure-list": { "displayName": "Figure List", "purpose": "Magnitudes in the event list and toasts." },
+      "title": { "displayName": "Title", "purpose": "Place name in the quake detail." },
+      "heading-small": { "displayName": "Heading Small", "purpose": "\"¿Tembló?\" and section headings in About." },
+      "body": { "displayName": "Body", "purpose": "List rows, controls, detail values; long text capped at 60–62ch." },
+      "label": { "displayName": "Label", "purpose": "Setting row labels, detail labels, metadata, pills. Sentence case, never uppercase." }
+    },
+    "shadows": [
+      { "name": "map-tool", "value": "0 2px 10px rgba(0, 0, 0, 0.35)", "purpose": "Floating map tools only: layer menu, toasts, hover popups, loading pill." },
+      { "name": "sheet", "value": "0 -6px 20px rgba(0, 0, 0, 0.35)", "purpose": "The phone bottom sheet, sitting on the map." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.25, 1, 0.5, 1)", "purpose": "All state transitions (hover, selection, toasts), 120–250 ms." },
+      { "name": "map-pulse", "value": "expanding ring on recent events", "purpose": "The only ambient motion: marks quakes that just happened." }
+    ],
+    "breakpoints": [
+      { "name": "phone", "value": "760px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action in a view (Share). Trace Orange with dark ink text.",
+      "html": "<button class=\"ds-btn-primary\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3v12M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5\"/></svg>Compartir</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--accent, #ff6a3d); background: var(--accent, #ff6a3d); color: var(--accent-ink, #1c0e08); font: 600 13px/1.42 Archivo, system-ui, sans-serif; cursor: pointer; transition: background 0.15s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.15s cubic-bezier(0.25, 1, 0.5, 1); } .ds-btn-primary svg { width: 16px; height: 16px; } .ds-btn-primary:hover { background: #ff7d55; border-color: #ff7d55; } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent, #ff6a3d); outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined secondary actions (Zoom to epicenter, Official report).",
+      "html": "<button class=\"ds-btn-secondary\">Acercar al epicentro</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line-strong, rgba(236, 228, 216, 0.18)); background: transparent; color: var(--text, #ece7df); font: 500 13px/1.42 Archivo, system-ui, sans-serif; cursor: pointer; transition: background 0.15s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.15s cubic-bezier(0.25, 1, 0.5, 1); } .ds-btn-secondary:hover { background: var(--surface-2, #1c1a18); border-color: rgba(236, 228, 216, 0.28); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--accent, #ff6a3d); outline-offset: 2px; }"
+    },
+    {
+      "name": "Settings Row",
+      "kind": "nav",
+      "refersTo": "setting-option",
+      "description": "Labelled row of plain-text options; the active one gets Chart Ink and a Trace Orange underline.",
+      "html": "<div class=\"ds-setting\"><span class=\"ds-setting-label\">Período</span><div class=\"ds-setting-opts\"><button>24 h</button><button aria-pressed=\"true\">7 días</button><button>30 días</button></div></div>",
+      "css": ".ds-setting { display: grid; grid-template-columns: 52px 1fr; align-items: baseline; column-gap: 10px; font: 13px/1.42 Archivo, system-ui, sans-serif; } .ds-setting-label { color: var(--faint, #8a8378); font-size: 12px; } .ds-setting-opts { display: flex; flex-wrap: wrap; column-gap: 14px; } .ds-setting-opts button { padding: 4px 0 3px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted, #a39c91); font: 500 13px/1.42 Archivo, system-ui, sans-serif; cursor: pointer; transition: color 0.15s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.15s cubic-bezier(0.25, 1, 0.5, 1); } .ds-setting-opts button:hover { color: var(--text, #ece7df); } .ds-setting-opts button[aria-pressed=\"true\"] { color: var(--text, #ece7df); border-bottom-color: var(--accent, #ff6a3d); } .ds-setting-opts button:focus-visible { outline: 2px solid var(--accent, #ff6a3d); outline-offset: 2px; }"
+    },
+    {
+      "name": "Event Row",
+      "kind": "custom",
+      "refersTo": "event-row",
+      "description": "Event list row: map-coloured dot sized by magnitude, condensed figure, place and metadata.",
+      "html": "<button class=\"ds-ev\"><span class=\"ds-mag\" style=\"--c: #ff8a3d; --s: 9px\"><i></i>3.4</span><span class=\"ds-ev-main\"><span class=\"ds-ev-place\">Frente a la costa de Costa Rica</span><span class=\"ds-ev-meta\">hace 2 h · 12 km de prof. · OVSICORI</span></span><span class=\"ds-tag\">CR</span></button>",
+      "css": ".ds-ev { display: flex; align-items: center; gap: 12px; width: 340px; padding: 8px 16px 8px 10px; border: 0; background: none; color: var(--text, #ece7df); text-align: left; font: 13px/1.42 Archivo, system-ui, sans-serif; cursor: pointer; transition: background 0.12s cubic-bezier(0.25, 1, 0.5, 1); } .ds-ev:hover { background: var(--surface-2, #1c1a18); } .ds-ev:focus-visible { outline: 2px solid var(--accent, #ff6a3d); outline-offset: -2px; } .ds-mag { flex: none; width: 56px; display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 16px; line-height: 1; letter-spacing: -0.01em; font-variation-settings: 'wdth' 82; font-variant-numeric: tabular-nums; } .ds-mag i { flex: none; width: var(--s); height: var(--s); margin: 0 calc((16px - var(--s)) / 2); border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); } .ds-ev-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; } .ds-ev-place, .ds-ev-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-ev-place { font-weight: 500; } .ds-ev-meta { color: var(--muted, #a39c91); font-size: 12px; } .ds-tag { flex: none; font-size: 11px; font-weight: 700; color: var(--accent-text, #ff9a76); }"
+    },
+    {
+      "name": "¿Tembló? Heading",
+      "kind": "custom",
+      "description": "Signature answer-first heading, shown here in its 'now' state (felt quake within the last hour).",
+      "html": "<button class=\"ds-temblo\"><span class=\"ds-temblo-mag\" style=\"--c: #ff4d5e\"><i></i>4.1</span><span class=\"ds-temblo-text\"><span class=\"ds-temblo-q\">¿Tembló? <small>Costa Rica</small></span><b>Sí · hace 12 min</b><span class=\"ds-temblo-sub\">23 km al SE de Cartago · 8 km de prof.</span></span></button>",
+      "css": ".ds-temblo { display: flex; align-items: center; gap: 12px; width: 344px; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--line, rgba(236, 228, 216, 0.09)); background: var(--accent-soft, rgba(255, 106, 61, 0.14)); color: var(--text, #ece7df); text-align: left; font: 13px/1.3 Archivo, system-ui, sans-serif; cursor: pointer; transition: background 0.15s cubic-bezier(0.25, 1, 0.5, 1); } .ds-temblo:hover { background: rgba(255, 106, 61, 0.2); } .ds-temblo:focus-visible { outline: 2px solid var(--accent, #ff6a3d); outline-offset: -2px; } .ds-temblo-mag { flex: none; min-width: 64px; display: inline-flex; align-items: center; gap: 8px; font-weight: 750; font-size: 26px; line-height: 1; letter-spacing: -0.02em; font-variation-settings: 'wdth' 78; font-variant-numeric: tabular-nums; } .ds-temblo-mag i { width: 12px; height: 12px; border-radius: 50%; background: var(--c); } .ds-temblo-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; } .ds-temblo-q { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; } .ds-temblo-q small { font-size: 12px; font-weight: 400; color: var(--muted, #a39c91); margin-left: 4px; } .ds-temblo b { font-weight: 500; color: var(--accent-text, #ff9a76); } .ds-temblo-sub { color: var(--muted, #a39c91); font-size: 12px; }"
+    },
+    {
+      "name": "Play Button",
+      "kind": "button",
+      "refersTo": "play-button",
+      "description": "Timeline replay control: round, Trace Orange, dark icon.",
+      "html": "<button class=\"ds-play\" aria-label=\"Reproducir\"><svg viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M8 5.5v13a1 1 0 0 0 1.5.9l10-6.5a1 1 0 0 0 0-1.8l-10-6.5A1 1 0 0 0 8 5.5z\"/></svg></button>",
+      "css": ".ds-play { width: 36px; height: 36px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--accent, #ff6a3d); color: var(--accent-ink, #1c0e08); cursor: pointer; transition: background 0.15s cubic-bezier(0.25, 1, 0.5, 1); } .ds-play svg { width: 16px; height: 16px; } .ds-play:hover { background: #ff7d55; } .ds-play:focus-visible { outline: 2px solid var(--accent, #ff6a3d); outline-offset: 2px; }"
+    },
+    {
+      "name": "Timeline Pill",
+      "kind": "chip",
+      "refersTo": "timeline-pill",
+      "description": "Small outlined toggle in the timeline (speed, Live); Live turns Field Green when active.",
+      "html": "<button class=\"ds-pill\">1×</button> <button class=\"ds-pill\" aria-pressed=\"true\">En vivo</button>",
+      "css": ".ds-pill { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--line-strong, rgba(236, 228, 216, 0.18)); background: none; color: var(--muted, #a39c91); font: 500 12px/1.42 Archivo, system-ui, sans-serif; font-variant-numeric: tabular-nums; cursor: pointer; transition: color 0.15s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.15s cubic-bezier(0.25, 1, 0.5, 1); } .ds-pill:hover { color: var(--text, #ece7df); } .ds-pill[aria-pressed=\"true\"] { color: var(--ok, #5fd38d); border-color: rgba(95, 211, 141, 0.4); } .ds-pill:focus-visible { outline: 2px solid var(--accent, #ff6a3d); outline-offset: 2px; }"
+    },
+    {
+      "name": "Layer Tool Row",
+      "kind": "nav",
+      "description": "Row in the floating layer menu; active rows show Chart Ink text and a Trace Orange icon.",
+      "html": "<div class=\"ds-rail\"><button aria-pressed=\"true\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2 14l4-3 3 4 4-7 3 5 3-3 3 2\"/></svg>Límites de placas</button><button aria-pressed=\"false\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 20l5.5-9h7L21 20z\"/><path d=\"M10 7c0-1.5 1.5-1.5 1.5-3M14 7c0-1.5 1.5-1.5 1.5-3\"/></svg>Volcanes (CR)</button></div>",
+      "css": ".ds-rail { width: 176px; padding: 4px; display: flex; flex-direction: column; gap: 1px; background: var(--surface, #141311); border: 1px solid var(--line, rgba(236, 228, 216, 0.09)); border-radius: 6px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); } .ds-rail button { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; border-radius: 4px; background: none; color: var(--muted, #a39c91); text-align: left; font: 13px/1.42 Archivo, system-ui, sans-serif; cursor: pointer; transition: color 0.15s cubic-bezier(0.25, 1, 0.5, 1), background 0.15s cubic-bezier(0.25, 1, 0.5, 1); } .ds-rail svg { width: 18px; height: 18px; flex: none; } .ds-rail button:hover { color: var(--text, #ece7df); background: var(--surface-2, #1c1a18); } .ds-rail button[aria-pressed=\"true\"] { color: var(--text, #ece7df); } .ds-rail button[aria-pressed=\"true\"] svg { color: var(--accent, #ff6a3d); } .ds-rail button[aria-pressed=\"false\"] svg { opacity: 0.7; } .ds-rail button:focus-visible { outline: 2px solid var(--accent, #ff6a3d); outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Field Station",
+    "overview": "Sismo is set up like a seismograph station's console. The map is the instrument, and everything else is docked around it: a full-height sidebar on the left, the timeline along the bottom, and one small tool panel over the map. Surfaces are solid and separated by hairlines, not floating cards. Settings read like labelled controls on a panel. Magnitudes are set as measurements: condensed, tabular, and marked with the same coloured dot the map uses.\n\nIt is warm and local at rest. The neutrals are warm-tinted near-blacks (Drum Black, not navy), copy is Spanish first, and places are described relative to Costa Rican towns. It becomes urgent only when something has actually happened: a quake felt in the last hour, a new event arriving, a recent event pulsing on the map. That urgency is carried by Trace Orange and plain wording. It never borrows the look of an official alert. Sismo is not OVSICORI, RSN-UCR or CNE, and must never look like them (see PRODUCT.md).\n\nThis system replaced a floating-glass-card look that read as AI-generated: Inter, frosted panels with soft shadows, pill segments, uppercase eyebrow labels, pulsing status dots and coloured glows. Those are its anti-references.",
+    "keyCharacteristics": [
+      "Docked, full-height surfaces with 1px hairlines; the map fills the rest.",
+      "One accent (Trace Orange) on warm near-black neutrals; colour otherwise belongs to data.",
+      "Archivo throughout, using its width axis: expanded wordmark, condensed figures.",
+      "Magnitude = map-coloured dot + condensed figure, sized like the map symbol.",
+      "Sentence case everywhere; no eyebrows, no status chips.",
+      "Motion only for state: 120–250 ms ease-out, map pulse for recent events."
+    ],
+    "rules": [
+      { "name": "The One Trace Rule", "body": "Trace Orange is the only accent. It marks the primary action, the current selection and real urgency, and nothing decorative. Never add a second accent hue.", "section": "colors" },
+      { "name": "The Data Owns Colour Rule", "body": "The rainbow depth scale is a data encoding and stays inside data (map, dots, legend, timeline). Never reuse data hues for UI chrome, and never tint the chrome to match them.", "section": "colors" },
+      { "name": "The Warm Neutral Rule", "body": "Neutrals are warm-tinted near-blacks. Never use cool navy or blue-grey (#0a0e15, #8f9bb1 and the like), pure black, or neutral grey.", "section": "colors" },
+      { "name": "The Figure Rule", "body": "Every magnitude is a condensed, tabular figure next to a dot in the event's map colour, sized like the map symbol (5–16px). Never put a magnitude inside a coloured tile, badge or chip.", "section": "typography" },
+      { "name": "The No Eyebrow Rule", "body": "No uppercase, letter-spaced micro-labels anywhere. Labels are sentence case at 12px in Graphite Faint, and headings carry their own weight.", "section": "typography" },
+      { "name": "The One Family Rule", "body": "Archivo only. Hierarchy comes from width, weight and size, not a second typeface. Don't add a monospace for a \"technical\" look.", "section": "typography" },
+      { "name": "The Docked, Not Floating Rule", "body": "Primary surfaces attach to a viewport edge and separate with a 1px hairline. Only small map tools (the layer menu, toasts, hover popups, the loading pill) float. Never float the sidebar, list or timeline as cards with gaps around them.", "section": "layout" },
+      { "name": "The Map Echo Rule", "body": "Anything that stands for a quake outside the map (list rows, detail, toasts, timeline markers, share cards) uses the map's colour for that quake and a proportional size.", "section": "layout" },
+      { "name": "The No Glass Rule", "body": "No backdrop blur, no frosted panels, no coloured glows (a zero-offset coloured halo or a coloured blurred shadow). Selection on the map is a white ring, not a glow.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do dock primary surfaces to the viewport edges and separate regions with 1px hairlines (rgba(236, 228, 216, 0.09)).",
+      "Do set every magnitude as a condensed tabular Archivo figure with a map-coloured dot.",
+      "Do keep Trace Orange for the primary action, active selection and real recent events. Use Trace Ink (#1c0e08) for text on it.",
+      "Do write sentence-case labels in Spanish first, and check every layout with the longer Spanish strings.",
+      "Do make urgency proportional and factual: \"Sí · hace 5 min\" in Trace Orange Text beats any alarm styling.",
+      "Do keep transitions at 120–250 ms with ease-out (cubic-bezier(0.25, 1, 0.5, 1)), and respect prefers-reduced-motion.",
+      "Do theme the browser surfaces too: text selection (Trace Orange at 35%), thin warm scrollbars, the Trace Orange caret and focus ring."
+    ],
+    "donts": [
+      "Don't use frosted glass, backdrop blur, coloured glows, gradient text or gradient banners.",
+      "Don't float the sidebar, list or timeline as rounded cards with gaps and soft shadows.",
+      "Don't put magnitudes, statuses or tags inside coloured tiles, chips or pills.",
+      "Don't use uppercase letter-spaced eyebrow labels, or pulsing \"live\" dots and badges.",
+      "Don't use Inter, Roboto, Geist, Space Grotesk or any second typeface. Archivo carries everything.",
+      "Don't use cool navy or blue-grey neutrals.",
+      "Don't imitate official alerts: no siren-red full-width banners, no warning iconography beyond the tsunami and PAGER notes, and no OVSICORI, RSN-UCR or CNE colours or logos. Sismo is not an alert service.",
+      "Don't use bounce or elastic easing, or animate anything that isn't a state change."
+    ]
+  }
+}

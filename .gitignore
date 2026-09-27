@@ -7,6 +7,7 @@ desktop.ini
 
 # Local Claude Code settings (launch.json is kept: it starts the dev server)
 .claude/settings.local.json
+.impeccable/config.local.json
 
 # Dependencies and build output
 node_modules/
