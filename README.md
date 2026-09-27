@@ -38,8 +38,9 @@ Meanwhile, the app's Share and WhatsApp buttons wait for the card: for a recent 
 
 Setup (once; it runs on the Workers free plan):
 
-1. Create a GitHub [fine-grained token](https://github.com/settings/personal-access-tokens/new) with access to only this repository and one permission: **Actions: Read and write**. Note its expiry date; the Worker logs `GitHub 401` once it expires.
-2. Deploy the Worker and give it the token:
+1. On a new Cloudflare account, open **Workers & Pages** in the dashboard once. That creates the account's `workers.dev` subdomain, which Cloudflare requires before it accepts a cron schedule, even though this Worker isn't served there. Without it, the deploy succeeds but the Worker never runs (`npx wrangler triggers deploy` shows the error and applies the schedule afterwards).
+2. Create a GitHub [fine-grained token](https://github.com/settings/personal-access-tokens/new) with access to only this repository and one permission: **Actions: Read and write**. Note its expiry date; the Worker logs `GitHub 401` once it expires.
+3. Deploy the Worker and give it the token (one command at a time in Windows PowerShell 5.1):
 
    ```bash
    cd worker
@@ -48,6 +49,8 @@ Setup (once; it runs on the Workers free plan):
    npm run deploy
    npx wrangler secret put GITHUB_TOKEN
    ```
+
+   The deploy output should list `schedule: * * * * *`.
 
 Site URL, repository and workflow are set in `worker/wrangler.toml`. `npm run logs` streams the Worker's logs (they are also in the Cloudflare dashboard). To try it locally, run `npm run dev` and open `http://localhost:8787/__scheduled`. Without a token it only logs what it would start.
 
