@@ -1,0 +1,3 @@
+# Impeccable launchers: the sh script must keep LF, the Windows one CRLF, whatever core.autocrlf says.
+.claude/skills/impeccable/scripts/impeccable text eol=lf
+.claude/skills/impeccable/scripts/impeccable.cmd text eol=crlf
