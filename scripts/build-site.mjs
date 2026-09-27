@@ -21,7 +21,10 @@ const CR = { w: -87.5, e: -82, s: 7, n: 12 };
 
 const LAND_URL = 'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson';
 const PLATES_URL = 'https://cdn.jsdelivr.net/gh/fraxen/tectonicplates@master/GeoJSON/PB2002_boundaries.json';
-const FONT_URL = w => `https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-${w}-normal.ttf`;
+// Static Archivo cuts from the foundry (OFL), pinned: resvg can't use variable-font axes, and these
+// carry clean family names ("Archivo", "Archivo Condensed", "Archivo Expanded") for matching.
+const FONT_BASE = 'https://cdn.jsdelivr.net/gh/Omnibus-Type/Archivo@211127690e8ff106c36c935f7e5e697114cff103/fonts/ttf/';
+const FONTS = ['Archivo-Regular', 'Archivo-Medium', 'Archivo-Bold', 'ArchivoCondensed-Bold', 'ArchivoExpanded-ExtraBold'];
 
 // Reuse the browser code: translations, towns, data sources and the share kit.
 globalThis.window = globalThis;
@@ -42,10 +45,10 @@ async function attempt(label, fn, fallback) {
 async function fontFiles() {
   await fs.mkdir(CACHE, { recursive: true });
   const files = [];
-  for (const w of [400, 600, 700]) {
-    const file = path.join(CACHE, `inter-${w}.ttf`);
+  for (const name of FONTS) {
+    const file = path.join(CACHE, `${name}.ttf`);
     try { await fs.access(file); } catch {
-      await fs.writeFile(file, Buffer.from(await (await fetchOk(FONT_URL(w))).arrayBuffer()));
+      await fs.writeFile(file, Buffer.from(await (await fetchOk(`${FONT_BASE}${name}.ttf`)).arrayBuffer()));
     }
     files.push(file);
   }
@@ -69,7 +72,7 @@ const geo = { land, plates };
 const siteLabel = SITE_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
 const render = svg => new Resvg(svg, {
-  font: { fontFiles: fonts, loadSystemFonts: fonts.length === 0, defaultFontFamily: 'Inter' },
+  font: { fontFiles: fonts, loadSystemFonts: fonts.length === 0, defaultFontFamily: 'Archivo' },
 }).render().asPng();
 
 // Pages for Costa Rica and its surroundings (M2.5+) and significant quakes anywhere (M5+).
@@ -116,7 +119,7 @@ await fs.writeFile(path.join(OUT, '404.html'), `<!doctype html>
     if (i >= 0) location.replace(p.slice(0, i + 1) + '?e=' + encodeURIComponent(p.slice(i + 3).split('/')[0]) + location.hash);
   })();
 </script>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0e15;color:#e9eef6;font:16px system-ui,sans-serif}a{color:#ff9a76}</style>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f0e0d;color:#ece7df;font:16px Archivo,system-ui,sans-serif}a{color:#ff9a76;text-underline-offset:2px}</style>
 </head><body><p>${LANG === 'es' ? 'Página no encontrada.' : 'Page not found.'} <a href="${basePath}">${LANG === 'es' ? 'Ir al mapa' : 'Go to the map'}</a></p></body></html>
 `);
 

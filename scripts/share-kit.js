@@ -5,14 +5,22 @@
   'use strict';
 
   const W = 1200, H = 630;
+  const PANEL = 560; // docked text panel on the left, like the app's sidebar
   // Same depth scale as the map (js/app.js).
   const DEPTH_STOPS = [[0, '#ff4d5e'], [10, '#ff8a3d'], [35, '#ffd23f'], [70, '#8ee06b'], [150, '#35c3e8'], [300, '#6f7bff'], [700, '#c77dff']];
-  const LOGO = 'M2 12h4l2-6 3 13 3-10 2 6 1.5-3H22';
+  const LOGO = 'M1 12h5l.8-1.6.9 2.8.9-2 .7 1.2h1.2l1.3-7.4 1.5 14.2 1.4-11 1.1 7.2 1-4.6.9 2.8.8-1.6H23';
+  // Palette and faces from css/style.css. The build loads static Archivo cuts (resvg has no
+  // variable-font axes); browsers fall back to the variable font with font-stretch.
+  const C = {
+    bg: '#0f0e0d', surface: '#141311', land: '#22201d', coast: '#3b3732', line: '#ece4d8',
+    text: '#ece7df', soft: '#d4cec4', muted: '#a39c91', faint: '#8a8378', accent: '#ff6a3d', accentText: '#ff9a76',
+  };
+  const FIGURES = `font-family="'Archivo Condensed', Archivo, sans-serif" font-stretch="condensed"`;
+  const WORDMARK = `font-family="'Archivo Expanded', Archivo, sans-serif" font-stretch="expanded"`;
 
   const xml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
   const hexRgb = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
   const toHex = c => '#' + c.map(x => x.toString(16).padStart(2, '0')).join('');
-  const ink = ([r, g, b]) => (0.299 * r + 0.587 * g + 0.114 * b > 120 ? '#0b0f17' : '#ffffff');
   const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
   function depthColor(d) {
@@ -81,9 +89,9 @@
 
   function baseMap(P, { land = [], plates = [] }) {
     return `
-    <rect width="${W}" height="${H}" fill="#0a0e15"/>
-    <path d="${pathFor(land, P, true)}" fill="#1b2332" stroke="#34405a" stroke-width="1.2" fill-rule="evenodd"/>
-    <path d="${pathFor(plates, P, false)}" fill="none" stroke="#ff9f43" stroke-opacity="0.45" stroke-width="2.2"/>`;
+    <rect width="${W}" height="${H}" fill="${C.bg}"/>
+    <path d="${pathFor(land, P, true)}" fill="${C.land}" stroke="${C.coast}" stroke-width="1.2" fill-rule="evenodd"/>
+    <path d="${pathFor(plates, P, false)}" fill="none" stroke="#ff9f43" stroke-opacity="0.42" stroke-width="2.2"/>`;
   }
 
   // Major towns for orientation, skipping any too close to `avoid` points (e.g. the epicenter).
@@ -91,24 +99,25 @@
     return root.Places.TOWNS
       .filter(t => t.major)
       .map(t => ({ ...t, x: P.x(t.lon), y: P.y(t.lat) }))
-      .filter(t => t.x > 640 && t.x < W - 150 && t.y > 40 && t.y < H - 40 && avoid.every(a => Math.hypot(a.x - t.x, a.y - t.y) > a.r))
+      .filter(t => t.x > PANEL + 40 && t.x < W - 150 && t.y > 40 && t.y < H - 40 && avoid.every(a => Math.hypot(a.x - t.x, a.y - t.y) > a.r))
       .slice(0, 7)
-      .map(t => `<circle cx="${t.x.toFixed(1)}" cy="${t.y.toFixed(1)}" r="4" fill="#cfd6e2" stroke="#0a0e15" stroke-width="1.5"/>
-    <text x="${(t.x + 10).toFixed(1)}" y="${(t.y + 6).toFixed(1)}" font-size="19" fill="#c7cfdb" stroke="#0a0e15" stroke-width="4" paint-order="stroke">${xml(t.name)}</text>`)
+      .map(t => `<circle cx="${t.x.toFixed(1)}" cy="${t.y.toFixed(1)}" r="4" fill="${C.soft}" stroke="${C.bg}" stroke-width="1.5"/>
+    <text x="${(t.x + 10).toFixed(1)}" y="${(t.y + 6).toFixed(1)}" font-size="19" fill="${C.soft}" stroke="${C.bg}" stroke-width="4" paint-order="stroke">${xml(t.name)}</text>`)
       .join('');
   }
 
+  // Solid panel with a hairline edge; the map shows to its right.
   const textPanel = `
-    <defs><linearGradient id="fade" x1="0" x2="1" y1="0" y2="0">
-      <stop offset="0" stop-color="#0a0e15" stop-opacity="0.97"/>
-      <stop offset="0.46" stop-color="#0a0e15" stop-opacity="0.9"/>
-      <stop offset="0.64" stop-color="#0a0e15" stop-opacity="0"/>
-    </linearGradient></defs>
-    <rect width="${W}" height="${H}" fill="url(#fade)"/>`;
+    <rect width="${PANEL}" height="${H}" fill="${C.surface}"/>
+    <rect x="${PANEL}" width="1.5" height="${H}" fill="${C.line}" fill-opacity="0.14"/>`;
 
   const brand = (x, y, size) => `
-    <g transform="translate(${x} ${y - size * 0.8}) scale(${(size * 1.1) / 24})"><path d="${LOGO}" fill="none" stroke="#ff6a3d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></g>
-    <text x="${x + size * 1.45}" y="${y}" font-size="${size}" font-weight="700" fill="#e9eef6">Sismo</text>`;
+    <g transform="translate(${x} ${y - size * 0.82}) scale(${(size * 1.15) / 24})"><path d="${LOGO}" fill="none" stroke="${C.accent}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <text x="${x + size * 1.5}" y="${y}" ${WORDMARK} font-size="${size}" font-weight="800" letter-spacing="${-size * 0.015}" fill="${C.text}">Sismo</text>`;
+
+  const footer = text => `
+    <rect x="64" y="546" width="${PANEL - 128}" height="1" fill="${C.line}" fill-opacity="0.12"/>
+    <text x="64" y="580" font-size="20" fill="${C.faint}">${xml(text)}</text>`;
 
   function wrap(text, maxChars, maxLines) {
     const lines = [];
@@ -142,7 +151,7 @@
     return {
       mag, place, near, depth, title,
       when: `${when} (${T('og.crTime')})`,
-      agency: Sources.agency(e).name,
+      agency: Sources.agency(e).short,
       description: [near ? place : null, `${when} (${T('og.crTime')})`, depth].filter(Boolean).join(' · ') + '. ' + T('og.more'),
     };
   }
@@ -152,57 +161,62 @@
     const d = describe(e);
     const m = e.mag ?? 0;
     const span = m >= 7 ? 32 : m >= 5.5 ? 16 : 7;
-    const P = projector(e.lon, e.lat, span, 820, 320);
-    const col = depthColor(e.depth), c = toHex(col);
+    const P = projector(e.lon, e.lat, span, (PANEL + W) / 2, 315);
+    const c = toHex(depthColor(e.depth));
     const ex = P.x(e.lon), ey = P.y(e.lat);
     const r = Math.max(11, Math.min(30, 4 + m * 3.4));
-    const titleLines = wrap(d.place, 22, 2);
-    let y = 318;
+    // Text column is 64…496 px; worst case (two-line place and two-line "near") ends above the footer.
     const lines = [];
-    titleLines.forEach(t => { lines.push(`<text x="64" y="${y}" font-size="50" font-weight="700" fill="#ffffff">${xml(t)}</text>`); y += 58; });
+    let y = 324;
+    wrap(d.place, 21, 2).forEach(t => { lines.push(`<text x="64" y="${y}" font-size="42" font-weight="700" letter-spacing="-0.4" fill="${C.text}">${xml(t)}</text>`); y += 48; });
     y += 2;
-    if (d.near) { lines.push(`<text x="64" y="${y}" font-size="30" font-weight="600" fill="#ff9a76">${xml(d.near)}</text>`); y += 46; }
-    lines.push(`<text x="64" y="${y}" font-size="26" fill="#c7cfdb">${xml(d.when)}</text>`); y += 40;
-    if (d.depth) lines.push(`<text x="64" y="${y}" font-size="26" fill="#8f9bb1">${xml(d.depth)}</text>`);
+    if (d.near) {
+      wrap(d.near, 32, 2).forEach(t => { lines.push(`<text x="64" y="${y}" font-size="24" font-weight="500" fill="${C.accentText}">${xml(t)}</text>`); y += 30; });
+      y += 8;
+    }
+    lines.push(`<text x="64" y="${y}" font-size="21" fill="${C.soft}">${xml(d.when)}</text>`); y += 32;
+    if (d.depth) lines.push(`<text x="64" y="${y}" font-size="21" fill="${C.muted}">${xml(d.depth)}</text>`);
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Inter, sans-serif">
+    // Epicenter drawn like the selected quake in the app: filled dot, white ring, two faint wave rings.
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, sans-serif">
     ${baseMap(P, geo)}
     ${townLabels(P, [{ x: ex, y: ey, r: 90 }])}
-    <defs><radialGradient id="glow"><stop offset="0" stop-color="${c}" stop-opacity="0.55"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs>
-    <circle cx="${ex}" cy="${ey}" r="${r * 5}" fill="url(#glow)"/>
-    <circle cx="${ex}" cy="${ey}" r="${r * 3.6}" fill="none" stroke="${c}" stroke-opacity="0.22" stroke-width="2"/>
-    <circle cx="${ex}" cy="${ey}" r="${r * 2.3}" fill="none" stroke="${c}" stroke-opacity="0.45" stroke-width="2.5"/>
-    <circle cx="${ex}" cy="${ey}" r="${r}" fill="${c}" stroke="#ffffff" stroke-width="3"/>
+    <circle cx="${ex}" cy="${ey}" r="${r * 3.8}" fill="none" stroke="${c}" stroke-opacity="0.2" stroke-width="1.5"/>
+    <circle cx="${ex}" cy="${ey}" r="${r * 2.4}" fill="none" stroke="${c}" stroke-opacity="0.4" stroke-width="2"/>
+    <circle cx="${ex}" cy="${ey}" r="${r + 7}" fill="none" stroke="#ffffff" stroke-width="3"/>
+    <circle cx="${ex}" cy="${ey}" r="${r}" fill="${c}"/>
     ${textPanel}
-    ${brand(64, 76, 32)}
-    <rect x="64" y="116" width="${d.mag.length > 3 ? 236 : 204}" height="118" rx="24" fill="${c}"/>
-    <text x="88" y="150" font-size="22" font-weight="700" fill="${ink(col)}" fill-opacity="0.75">M</text>
-    <text x="86" y="220" font-size="76" font-weight="700" fill="${ink(col)}">${xml(d.mag)}</text>
+    ${brand(64, 82, 30)}
+    <circle cx="73" cy="${150 - 7}" r="9" fill="${c}"/>
+    <text x="92" y="150" font-size="22" fill="${C.muted}">${xml(root.I18N.t('og.mag'))}</text>
+    <text x="58" y="264" ${FIGURES} font-size="138" font-weight="700" letter-spacing="-3.5" fill="${C.text}">${xml(d.mag)}</text>
     ${lines.join('\n    ')}
-    <text x="64" y="592" font-size="21" fill="#6f7b91">${xml(site)}  ·  ${xml(root.I18N.t('og.data', { agency: d.agency }))}</text>
+    ${footer(`${site}  ·  ${root.I18N.t('og.data', { agency: d.agency })}`)}
   </svg>`;
   }
 
   function siteSVG(events, geo, site) {
     const T = root.I18N.t;
-    const P = projector(-84.2, 9.7, 7.5, 830, 330);
+    const P = projector(-84.2, 9.7, 9, (PANEL + W) / 2, 330);
     const dots = events
       .filter(e => e.lon > P.west && e.lon < P.east && e.lat > P.south && e.lat < P.north)
       .sort((a, b) => (a.mag ?? 0) - (b.mag ?? 0))
       .map(e => {
         const r = Math.max(3.5, Math.min(22, 1.5 + (e.mag ?? 0) * 2.6));
-        return `<circle cx="${P.x(e.lon).toFixed(1)}" cy="${P.y(e.lat).toFixed(1)}" r="${r.toFixed(1)}" fill="${toHex(depthColor(e.depth))}" fill-opacity="0.85" stroke="#0a0e15" stroke-width="1.2"/>`;
+        return `<circle cx="${P.x(e.lon).toFixed(1)}" cy="${P.y(e.lat).toFixed(1)}" r="${r.toFixed(1)}" fill="${toHex(depthColor(e.depth))}" fill-opacity="0.85" stroke="${C.bg}" stroke-width="1.2"/>`;
       }).join('');
+    const head = wrap(T('og.siteSub'), 16, 2);
     const sub = wrap(T('og.siteLine'), 34, 3);
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Inter, sans-serif">
+    const subY = 262 + head.length * 50 + 20;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, sans-serif">
     ${baseMap(P, geo)}
     ${dots}
     ${townLabels(P)}
     ${textPanel}
-    ${brand(64, 200, 88)}
-    <text x="64" y="284" font-size="40" font-weight="600" fill="#ff9a76">${xml(T('og.siteSub'))}</text>
-    ${sub.map((l, i) => `<text x="64" y="${350 + i * 40}" font-size="28" fill="#c7cfdb">${xml(l)}</text>`).join('')}
-    <text x="64" y="592" font-size="21" fill="#6f7b91">${xml(site)}</text>
+    ${brand(64, 176, 72)}
+    ${head.map((l, i) => `<text x="64" y="${262 + i * 50}" font-size="42" font-weight="700" letter-spacing="-0.4" fill="${C.text}">${xml(l)}</text>`).join('')}
+    ${sub.map((l, i) => `<text x="64" y="${subY + i * 34}" font-size="24" fill="${C.soft}">${xml(l)}</text>`).join('')}
+    ${footer(site)}
   </svg>`;
   }
 

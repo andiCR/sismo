@@ -106,6 +106,7 @@ window.I18N = (() => {
       'og.siteSub': 'Live earthquake map',
       'og.siteLine': 'Costa Rica and the world · data from OVSICORI, RSN-UCR, EMSC and USGS',
       'og.data': ({ agency }) => `Data: ${agency}`,
+      'og.mag': 'Magnitude',
     },
 
     es: {
@@ -208,6 +209,7 @@ window.I18N = (() => {
       'og.siteSub': 'Mapa de sismos en vivo',
       'og.siteLine': 'Costa Rica y el mundo · datos del OVSICORI, la RSN-UCR, el EMSC y el USGS',
       'og.data': ({ agency }) => `Datos: ${agency}`,
+      'og.mag': 'Magnitud',
     },
   };
 
