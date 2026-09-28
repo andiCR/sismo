@@ -79,6 +79,15 @@ Quakes that were likely felt (or M4.5+) get a "Reports and coverage" section in 
 | Witness reports, with links to EMSC's photo and report pages | EMSC testimonies API | By `unid` for EMSC quakes, by time and distance for USGS ones |
 | Wikipedia article | Wikipedia search, `nearcoord:300km` plus the year, in the page language first | M6+ only |
 
+### Shaking on the map
+
+The selected quake gets an intensity gradient (Modified Mercalli, in the USGS ShakeMap colors that RSN-UCR also uses) with contour lines at each level, and a legend in the detail view (`js/shaking.js`):
+
+- **Measured**, when the USGS event found for "Reports and coverage" has a ShakeMap: its MMI grid (`coverage_mmi_medium_res.covjson`) and contours (`cont_mmi.json`). The grid is a box, so it fades out in a round vignette.
+- **Estimated** otherwise, from magnitude, depth and distance only, with the intensity prediction equation of Allen, Wald & Worden (2012, hypocentral form, coefficients as in OpenQuake's `AllenEtAl2012Rhypo`). Its contours are dashed, and the legend says it's a model. Quakes whose estimate never reaches III get nothing. "Did You Feel It?" 10 km squares (`dyfi_geo_10km.geojson`) are drawn on top when there are any.
+
+The estimate knows nothing about local ground or the direction of the rupture. On the M5.0 of 2026-09-10 near Quepos it matched the felt reports in Quepos (about IV), but ran about one level strong around 100 km away. RSN-UCR's own instrumental intensity map is only published as an image, so it stays a thumbnail in "Reports and coverage".
+
 Matching Costa Rican news articles to quakes was prototyped in the Worker (commit 89d364a) and dropped: news sites allow no browser requests, and parsing their feeds takes 35–45 ms of CPU per request, over the Workers free plan's 10 ms.
 
 ## Features
@@ -89,6 +98,7 @@ Matching Costa Rican news articles to quakes was prototyped in the Worker (commi
 - Timeline histogram at the bottom: drag to scrub, or press play (or Space) to replay the period
 - Event list filtered to the map view; sort by latest or strongest; minimum-magnitude slider
 - Event details: local time and Costa Rica time, depth class, energy in TNT, nearby activity, link to the official report
+- Shaking gradient around the selected quake: the USGS ShakeMap when there is one, else a labeled estimate (see "Shaking on the map")
 - Toasts for new events in view (or any M5+ worldwide)
 - "Near me" shows distances to each event
 - Settings are remembered, and the map position is kept in the URL hash so views can be shared
@@ -110,7 +120,7 @@ Besides pageviews, `track()` in `js/app.js` sends these events:
 | `share` | `method`: `native`, `copy` or `whatsapp`; `mag`, `cr`, `source` |
 | `official-report` | the agency link in the detail view was opened |
 | `replay`, `scrub` | timeline use |
-| `layer`, `color-by`, `globe` | map rail toggles |
+| `layer`, `color-by`, `globe` | map rail toggles, and the detail view's shaking toggle (`layer: shaking`) |
 | `source`, `period`, `sort`, `min-mag`, `in-view`, `go-to`, `near-me` | filters and navigation |
 | `context` | a link in "Reports and coverage" was opened: `kind` `rsn`, `usgs`, `usgs-link`, `emsc`, `emsc-photos` or `wiki`; `mag`, `cr`, `source` |
 | `share-wait` | Share waited for a new quake's card: `outcome` `ready` (with `secs` waited), `skipped` ("Don't wait", with `secs`) or `timeout`; `mag`, `cr`, `source` |
@@ -142,6 +152,7 @@ The edit-time design check (hooks) is machine-local: it lives in the gitignored 
 - `worker/`: Cloudflare Worker that starts a build as soon as a new quake needs a share page
 - `js/sources.js`: data adapters (EMSC and USGS normalized to one event shape) and live feeds
 - `js/context.js`: "Reports and coverage" in the detail view (RSN-UCR, USGS, EMSC witnesses, Wikipedia)
+- `js/shaking.js`: the selected quake's shaking gradient (USGS ShakeMap, or an estimate from magnitude, depth and distance)
 - `js/app.js`: map, layers, list, detail, timeline and replay
 - `serve.ps1`: tiny local static server
 

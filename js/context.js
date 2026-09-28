@@ -117,12 +117,17 @@ window.Context = (() => {
     const first = k => P[k]?.[0];
     const dyfi = first('dyfi')?.properties, shake = first('shakemap'), pager = first('losspager')?.properties;
     const num = v => (v == null || v === '' ? null : +v);
+    const file = (p, ...names) => names.map(n => p?.contents?.[n]?.url).find(Boolean) || null;
     const out = {
       url: j.properties.url,
       felt: num(dyfi?.['num-responses']) || num(j.properties.felt) || 0,
       cdi: num(dyfi?.maxmmi) ?? num(j.properties.cdi),
       mmi: num(shake?.properties?.maxmmi) ?? num(j.properties.mmi),
-      shakeImg: shake?.contents?.['download/intensity.jpg']?.url || null,
+      shakeImg: file(shake, 'download/intensity.jpg'),
+      // For the map's shaking layer (js/shaking.js)
+      shakeCov: file(shake, 'download/coverage_mmi_medium_res.covjson', 'download/coverage_mmi_low_res.covjson'),
+      shakeCont: file(shake, 'download/cont_mmi.json'),
+      dyfiGeo: file(first('dyfi'), 'dyfi_geo_10km.geojson'),
       pager: pager?.alertlevel || j.properties.alert || null,
       tsunami: !!j.properties.tsunami,
       links: (P['impact-link'] || []).map(p => ({ text: p.properties.text, url: p.properties.url }))
@@ -195,5 +200,8 @@ window.Context = (() => {
     if (Date.now() - e.t < HOUR) for (const k of cache.keys()) if (k.startsWith(e.id + '|') && !cache.get(k).pending) cache.delete(k);
   }
 
-  return { load, forgetIfFresh };
+  /** The parts loaded so far, without starting anything. */
+  const peek = (e, lang) => cache.get(`${e.id}|${lang}`)?.parts || null;
+
+  return { load, peek, forgetIfFresh };
 })();

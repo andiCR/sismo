@@ -50,7 +50,7 @@
   // ---------------------------------------------------------------- state
   const DEFAULTS = {
     source: 'EMSC', period: '7d', minMag: 0, colorBy: 'depth', inView: true, sort: 'time', globe: false,
-    layers: { quakes: true, heat: false, plates: true, volcanoes: true, labels: true },
+    layers: { quakes: true, heat: false, plates: true, volcanoes: true, labels: true, shaking: true },
   };
   const saved = (() => { try { return JSON.parse(localStorage.getItem('sismo:settings')) || {}; } catch { return {}; } })();
   const S = {
@@ -252,6 +252,9 @@
       ? ['interpolate', ['linear'], ['/', ['-', ref, ['get', 't']], HOUR], ...AGE_STOPS.flat()]
       : ['interpolate', ['linear'], ['coalesce', ['get', 'depth'], 0], ...DEPTH_STOPS.flat()];
   }
+  const EMPTY_FC = { type: 'FeatureCollection', features: [] };
+  const BLANK_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  const shakeColor = ['match', ['get', 'mmi'], ...Shaking.PALETTE.flatMap((c, i) => (i ? [i, c] : [])), '#ffffff'];
   const firstSymbolId = () => map.getStyle().layers.find(l => l.type === 'symbol')?.id;
 
   function setupLayers() {
@@ -267,6 +270,21 @@
       id: 'plates', type: 'line', source: 'plates',
       paint: { 'line-color': '#ff9f43', 'line-opacity': 0.4, 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.8, 8, 2.2] },
     }, below);
+
+    // Shaking around the selected quake (js/shaking.js): gradient and felt-report squares under
+    // the plate lines, intensity contours and their labels above the basemap's labels.
+    map.addSource('shake', { type: 'image', url: BLANK_PNG, coordinates: [[0, 1e-3], [1e-3, 1e-3], [1e-3, 0], [0, 0]] });
+    map.addSource('shake-reports', { type: 'geojson', data: EMPTY_FC });
+    map.addSource('shake-lines', { type: 'geojson', data: EMPTY_FC });
+    map.addLayer({ id: 'shake', type: 'raster', source: 'shake', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, 'plates');
+    map.addLayer({
+      id: 'shake-reports', type: 'fill', source: 'shake-reports', layout: { visibility: 'none' },
+      paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.8, 'fill-outline-color': 'rgba(20,19,17,0.8)' },
+    }, 'plates');
+    map.addLayer({
+      id: 'shake-lines', type: 'line', source: 'shake-lines', layout: { visibility: 'none' },
+      paint: { 'line-color': shakeColor, 'line-opacity': 0.6, 'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.8, 9, 1.4] },
+    }, 'plates');
 
     map.addLayer({
       id: 'heat', type: 'heatmap', source: 'quakes',
@@ -318,6 +336,15 @@
       },
       paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(20,19,17,0.9)', 'text-halo-width': 1.4 },
     });
+
+    map.addLayer({
+      id: 'shake-labels', type: 'symbol', source: 'shake-lines',
+      layout: {
+        visibility: 'none', 'symbol-placement': 'line', 'symbol-spacing': 280,
+        'text-field': ['get', 'label'], 'text-font': FONT_BOLD, 'text-size': 11, 'text-keep-upright': true,
+      },
+      paint: { 'text-color': shakeColor, 'text-halo-color': 'rgba(20,19,17,0.9)', 'text-halo-width': 1.4 },
+    }, 'glow');
 
     addVolcanoIcon();
     map.addLayer({
@@ -530,6 +557,7 @@
     const inCR = userTZ === 'America/Costa_Rica';
     const waiting = shareWaiting(e);
     watchSharePage(e);
+    updateShaking(e);
     const alerts = [];
     if (e.tsunami) alerts.push(T('alert.tsunami'));
     if (e.alert && e.alert !== 'green') alerts.push(T('alert.pager', { level: e.alert }));
@@ -564,6 +592,7 @@
           : T('d.noNearby')}</dd></div>
       </dl>
       <p class="d-effects"><b>${T('d.effects')}</b> ${effects(e.mag)}${e.depth >= 150 ? ' ' + T('d.deepNote') : ''}</p>
+      ${shakeHtml(e)}
       <div class="d-actions">
         <button class="btn" data-act="zoom">${T('d.zoom')}</button>
         ${url ? `<a class="btn" data-act="report" href="${esc(url)}" target="_blank" rel="noopener">${T('d.report')}</a>` : ''}
@@ -583,7 +612,7 @@
   function contextHtml(e) {
     const st = Context.load(e, {
       inCR: Sources.inShareArea(e), lang: S.lang,
-      onUpdate: () => { if (detailOpen() && S.selectedId === e.id) { const el = $('#ctx'); if (el) { el.innerHTML = contextHtml(e); } } },
+      onUpdate: () => { if (detailOpen() && S.selectedId === e.id) { const el = $('#ctx'); if (el) { el.innerHTML = contextHtml(e); } updateShaking(e); } },
     });
     const { rsn, usgs, emsc, wiki } = st.parts;
     const official = [];
@@ -638,6 +667,71 @@
       ${parts.join('')}
       ${busy ? `<p class="ctx-status"><span class="spinner"></span>${esc(T('ctx.loading'))}</p>`
         : parts.length ? '' : `<p class="ctx-status">${esc(T('ctx.none'))}${Date.now() - e.t < 2 * HOUR ? ' ' + esc(T('ctx.fresh')) : ''}</p>`}`;
+  }
+
+  // ---------------------------------------------------------------- shaking (js/shaking.js)
+  /* The selected quake's shaking: a ShakeMap when USGS has one (found by the reports lookup),
+     else an estimate from magnitude, depth and distance, with "Did You Feel It?" squares on top.
+     The estimate shows straight away; a ShakeMap replaces it when it arrives. */
+  const shake = { key: null, id: null, field: null, reports: null, drawn: null };
+
+  function updateShaking(e) {
+    const usgs = Context.peek(e, S.lang)?.usgs;
+    const key = [e.id, e.mag, e.depth, e.lat, e.lon, usgs?.shakeCov, usgs?.dyfiGeo].join('|');
+    if (key === shake.key) return;
+    const sameEvent = shake.id === e.id;
+    Object.assign(shake, { key, id: e.id });
+    if (!sameEvent || shake.field?.kind !== 'measured') { shake.field = Shaking.estimate(e); shake.reports = null; }
+    drawShaking();
+    if (!usgs?.shakeCov && !usgs?.dyfiGeo) return;
+    (async () => {
+      let field = null, reports = null;
+      if (usgs.shakeCov) field = await Shaking.shakemap(usgs).catch(err => { console.warn('shakemap:', err.message); return null; });
+      if (!field && usgs.dyfiGeo) reports = await Shaking.reports(usgs.dyfiGeo).catch(err => { console.warn('dyfi:', err.message); return null; });
+      if (shake.key !== key) return; // another quake (or a newer version) meanwhile
+      if (field) shake.field = field;
+      shake.reports = reports;
+      drawShaking();
+      const el = $('#shake');
+      if (el && detailOpen() && S.selectedId === e.id) el.outerHTML = shakeHtml(e);
+    })();
+  }
+
+  function drawShaking() {
+    if (!map.getSource('shake')) return;
+    const f = shake.field, on = !!f && S.layers.shaking && !!detailOpen() && S.selectedId === shake.id;
+    const vis = v => (v ? 'visible' : 'none');
+    for (const id of ['shake', 'shake-lines', 'shake-labels']) map.setLayoutProperty(id, 'visibility', vis(on));
+    map.setLayoutProperty('shake-reports', 'visibility', vis(on && shake.reports));
+    if (!on) return;
+    if (shake.drawn !== f) {
+      map.getSource('shake').updateImage(Shaking.image(f));
+      map.getSource('shake-lines').setData(f.lines);
+      // Dashed contours for an estimate, solid for a measured map.
+      map.setPaintProperty('shake-lines', 'line-dasharray', f.kind === 'estimated' ? [3, 2] : undefined);
+      shake.drawn = f;
+    }
+    map.getSource('shake-reports').setData(shake.reports || EMPTY_FC);
+  }
+
+  function shakeHtml(e) {
+    const f = shake.id === e.id ? shake.field : null;
+    if (!f) return '';
+    const top = Shaking.level(f.peak), mmi = T('mmi');
+    const here = S.userLoc ? f.at(S.userLoc.lon, S.userLoc.lat) : NaN;
+    const scale = Shaking.ROMAN.slice(2).map((r, k) => {
+      const L = k + 2;
+      return `<span style="--c:${Shaking.PALETTE[L]}"${L > top ? ' class="off"' : ''} title="${esc(mmi[L])}">${r}</span>`;
+    }).join('');
+    return `<section class="shake" id="shake" data-kind="${f.kind}">
+      <div class="shake-head">
+        <b>${esc(T(`shake.${f.kind}`))}</b>
+        <label class="check"><input type="checkbox" data-act="shake-toggle"${S.layers.shaking ? ' checked' : ''}>${esc(T('shake.onMap'))}</label>
+      </div>
+      <div class="shake-scale" aria-hidden="true">${scale}</div>
+      <p>${esc(T('shake.peak', { i: intensity(f.peak) }))}${Number.isFinite(here) && here >= 1 ? ` · ${esc(T('shake.here', { i: intensity(here) }))}` : ''}</p>
+      <p class="muted">${esc(T(`shake.${f.kind}.note`))}${shake.reports ? ' ' + esc(T('shake.reports')) : ''}</p>
+    </section>`;
   }
 
   // ---------------------------------------------------------------- sharing
@@ -814,6 +908,7 @@
     }
     panel.dataset.view = view;
     document.body.classList.toggle('detail-open', view === 'detail');
+    drawShaking();
   }
 
   /* On phones the header and bottom sheet cover part of the map. This is the pixel offset
@@ -1263,6 +1358,11 @@
     else if (act === 'share' && S.selectedId) shareEvent(S.events.get(S.selectedId));
     else if (act === 'whatsapp' && S.selectedId) track('share', { method: 'whatsapp', ...evInfo(S.events.get(S.selectedId)) });
     else if (act === 'report' && S.selectedId) track('official-report', evInfo(S.events.get(S.selectedId)));
+    else if (act === 'shake-toggle') {
+      S.layers.shaking = el.checked;
+      track('layer', { layer: 'shaking', on: S.layers.shaking });
+      saveSettings(); drawShaking();
+    }
     else if (act === 'ctx' && S.selectedId) track('context', { kind: el.dataset.kind, ...evInfo(S.events.get(S.selectedId)) });
   });
 
