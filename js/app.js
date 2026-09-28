@@ -573,7 +573,7 @@
   }
 
   // ---------------------------------------------------------------- reports and coverage (js/context.js)
-  // Only quakes people may have felt get reports, witness photos or news.
+  // Only quakes people may have felt get reports or witness photos.
   const wantsContext = e => likelyFelt(e) || magOf(e) >= 4.5;
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
   const intensity = v => { const i = Math.max(1, Math.min(12, Math.round(v))); return `${ROMAN[i]} (${T('mmi')[Math.min(i, 10)]})`; };
@@ -585,7 +585,7 @@
       inCR: Sources.inShareArea(e), lang: S.lang,
       onUpdate: () => { if (detailOpen() && S.selectedId === e.id) { const el = $('#ctx'); if (el) { el.innerHTML = contextHtml(e); } } },
     });
-    const { rsn, usgs, emsc, wiki, news } = st.parts;
+    const { rsn, usgs, emsc, wiki } = st.parts;
     const official = [];
 
     if (rsn) {
@@ -632,19 +632,6 @@
           <span class="ctx-body"><b>${esc(wiki.title)} ↗</b><span class="clamp">${esc(wiki.extract)}</span></span>
         </a>`);
     }
-    if (news) {
-      parts.push(`<h4>${esc(T('ctx.news'))}</h4>
-        ${news.map(a => `<a class="ctx-item ctx-card" href="${esc(safeUrl(a.url) || '#')}" target="_blank" rel="noopener" data-act="ctx" data-kind="news" lang="es">
-          ${a.image && safeUrl(a.image) ? `<span class="ctx-thumb"><img src="${esc(a.image)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>` : ''}
-          <span class="ctx-body">
-            <span class="ctx-src">${esc(a.source)} · ${esc(ago(a.published))}</span>
-            <b class="clamp">${esc(a.title)}</b>
-            <span class="ctx-why">${esc(T('ctx.why', { list: a.why.map(w => T('ctx.why.' + w)).join(', ') }))}</span>
-          </span>
-        </a>`).join('')}
-        <p class="ctx-note">${esc(T('ctx.news.note'))}</p>`);
-    }
-
     const busy = st.pending > 0;
     requestAnimationFrame(() => $('#ctx')?.setAttribute('aria-busy', String(busy)));
     return `<h3 id="ctxTitle">${esc(T('ctx.title'))}</h3>

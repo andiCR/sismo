@@ -1,19 +1,16 @@
 /* More about one quake, from sources beyond the catalogues: the RSN-UCR report (where it was felt,
    intensity map), USGS "Did You Feel It?", ShakeMap and PAGER, EMSC witness reports and photos,
-   a Wikipedia article for major quakes, and local news matched by the Worker (worker/src/news.js).
+   and a Wikipedia article for major quakes. All of them allow browser requests, so no backend.
    Each part loads on its own and is cached per event; `load` calls onUpdate as parts arrive. */
 window.Context = (() => {
   'use strict';
 
-  const MIN = 6e4, HOUR = 36e5, DAY = 864e5;
+  const MIN = 6e4, HOUR = 36e5;
   const RSN_FEED = 'https://rsn.ucr.ac.cr/actividad-sismica/ultimos-sismos?format=feed&type=rss'; // last 10 felt quakes
   const RSN_LIST = 'https://rsn.ucr.ac.cr/actividad-sismica/ultimos-sismos?limit=100';        // older ones, by link only
   const USGS_API = 'https://earthquake.usgs.gov/fdsnws/event/1/query';
   const EMSC_TESTIMONIES = 'https://www.seismicportal.eu/testimonies-ws/api/search';
   const EMSC_SITE = 'https://www.emsc-csem.org/Earthquake_information/';
-  // The news matcher runs in the Worker (the feeds don't allow browser requests). Only local for now:
-  // `npm run dev` in worker/. Set the deployed Worker's URL here to turn it on for the site.
-  const NEWS_API = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? 'http://localhost:8787' : null;
 
   const cache = new Map(); // event id → state
 
@@ -171,13 +168,6 @@ window.Context = (() => {
     return null;
   }
 
-  // ---------------------------------------------------------------- news (Worker)
-  async function news(e) {
-    if (!NEWS_API) return null;
-    const j = await getJSON(`${NEWS_API}/news?id=${encodeURIComponent(e.id)}`);
-    return j?.articles?.length ? j.articles : null;
-  }
-
   // ---------------------------------------------------------------- orchestration
   /** Starts (once per event and language) and returns the state: { parts: {name: value|null|undefined}, pending }. */
   function load(e, { inCR, lang, onUpdate }) {
@@ -188,9 +178,8 @@ window.Context = (() => {
       rsn: inCR ? rsn : null,
       usgs, emsc,
       wiki: ev => wiki(ev, lang),
-      news: NEWS_API && Date.now() - e.t < 60 * DAY ? news : null,
     };
-    st = { parts: {}, pending: 0, onUpdate, newsEnabled: !!jobs.news };
+    st = { parts: {}, pending: 0, onUpdate };
     cache.set(key, st);
     for (const [name, fn] of Object.entries(jobs)) {
       if (!fn) continue;
