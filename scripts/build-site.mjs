@@ -60,7 +60,17 @@ async function fontFiles() {
 const t0 = Date.now();
 await fs.rm(OUT, { recursive: true, force: true });
 await fs.mkdir(OUT, { recursive: true });
-for (const p of ['index.html', 'css', 'js']) await fs.cp(path.join(ROOT, p), path.join(OUT, p), { recursive: true });
+for (const p of ['index.html', 'css', 'js', 'icons', 'manifest.webmanifest', 'sw.js']) await fs.cp(path.join(ROOT, p), path.join(OUT, p), { recursive: true });
+
+// App icons as PNG, for launchers and iOS that don't take the SVG. apple-touch-icon is full bleed:
+// iOS rounds the corners itself.
+for (const [src, out, size] of [
+  ['icon.svg', 'icon-192.png', 192], ['icon.svg', 'icon-512.png', 512],
+  ['maskable.svg', 'maskable-512.png', 512], ['maskable.svg', 'apple-touch-icon.png', 180],
+]) {
+  const svg = await fs.readFile(path.join(ROOT, 'icons', src), 'utf8');
+  await fs.writeFile(path.join(OUT, 'icons', out), new Resvg(svg, { fitTo: { mode: 'width', value: size } }).render().asPng());
+}
 
 // Data failures are not fatal: the app itself still deploys, just with fewer share pages.
 // USGS refreshes its month feed only every 15 minutes, so the day feed (refreshed every minute)

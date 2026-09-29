@@ -270,14 +270,22 @@ The detail answers first and then gets out of the way. In order:
 2. **Hero:** the Figure Display magnitude with its dot and type, the Title place, the "near" line in Trace Orange Text, then one Graphite line: when (time ago for the first week, a date after that) · depth with its class.
 3. Tsunami or PAGER alerts, only when the catalogue flags one.
 4. **Share and WhatsApp.**
-5. **Shaking:** one block with the Mercalli scale, one headline figure ("Hasta VI cerca del epicentro", plus "IV donde usted está" in Chart Ink when known) and one source line (the model or ShakeMap, plus the "¿Lo sintió?" count). When a quake has no shaking field, the "typical effects" sentence takes its place. The two never appear together.
-6. **Facts grid:** local time (full width unless distance-from-you is known) and nearby activity.
+5. **Shaking:** one block with the Mercalli scale, one headline figure ("Hasta VI cerca del epicentro"), then one line for the visitor and their saved places ("**Usted:** IV (leve) · **Casa:** III (débil)", names in Chart Ink, at most four, only those at II or above; otherwise "Probablemente no se sintió en sus lugares" in Graphite), and one source line (the model or ShakeMap, plus the "¿Lo sintió?" count). When a quake has no shaking field, the "typical effects" sentence takes its place. The two never appear together.
+6. **Facts grid:** local time (full width unless distance-from-you is known), then "En la zona": one sentence on recent activity nearby and, for M4.5+, one on history ("Ninguno tan fuerte a menos de 100 km desde el M6.2 del 12 oct 2024"), with the older quake as a Trace Orange Text link that opens it.
 7. **"Más datos"** (a native `details`, closed by default and kept open for the session once opened): Costa Rica time for visitors outside Costa Rica, UTC with seconds, coordinates, energy, and the full agency name.
 8. **Informes y cobertura:** the RSN-UCR report, USGS impact statements, and non-green PAGER levels the banner didn't already show. The Wikipedia card, then a single line of links (EMSC witness reports, photos, USGS). The section is left out when it finds nothing and the quake is more than 2 hours old.
 
 **The Say-It-Once Rule.** A figure appears once in the detail view. Don't show the ShakeMap maximum, the strongest "¿Lo sintió?" report and the model peak side by side: pick one headline and name the others as its source. Don't restate something the head, hero or alerts already say. When measured data exists, the estimate goes.
 
 **The Detail Budget Rule.** Everything above "Más datos" must earn its place for someone on a phone who just felt shaking. Anything new goes under "Más datos" or into "Informes y cobertura" unless it replaces or merges with something above. The rule of thumb: on a 375×812 phone, the open sheet shows everything from the magnitude through the shaking figure without scrolling. Specialist data never gets its own heading or box.
+
+### Saved places
+- A "Lugares" settings row after "Ir a": each place is a text option with a small house icon (same style as the region jumps), and the last option is "Guardar un lugar" (then "Agregar"). Adding one works in two steps: a toast asks for a tap on the map, then a map popup asks for the name.
+- On the map, a place is an 18px house icon on a Drum Black tile with a Hairline Strong border, and its name next to it in 11.5px/600 Chart Ink with a dark halo, like the basemap's labels. It's square, not round: circles belong to quakes.
+
+### Installable app
+- No banners or install prompts on the map. The browser's own install affordance does the work; "Sobre los datos" has one short install section (a primary button where the browser allows it, or the Add to Home Screen steps on iPhone). It's hidden when already installed.
+- App icon: the seismogram trace in Trace Orange on Drum Black. `icons/icon.svg` has rounded corners; `icons/maskable.svg` is full bleed with the trace inside the safe zone.
 
 ### Year archive
 - A fourth period option named after the current year (for example "2026"), styled like the other settings options. Its list holds only notable quakes (`Sources.isNotable`). Rows show the date instead of the time ago, and one Graphite line under the filters says what "notable" means. ¿Tembló? is hidden, because the archive can't answer "did it just shake?". The timeline runs from 1 January to now with month ticks.

@@ -65,6 +65,18 @@
   S.basePeriod = S.period; // the last live period; the archive is never remembered as the start view
   const isYear = () => S.period === 'year';
 
+  // Saved places ("Casa", "Mamá"…): kept in this browser only, like the visitor's location.
+  const PLACES_KEY = 'sismo:places', MAX_PLACES = 6;
+  S.places = (() => {
+    try {
+      const p = JSON.parse(localStorage.getItem(PLACES_KEY));
+      return Array.isArray(p) ? p.filter(x => x && typeof x.name === 'string' && Number.isFinite(x.lat) && Number.isFinite(x.lon)).slice(0, MAX_PLACES) : [];
+    } catch { return []; }
+  })();
+  function savePlaces() {
+    try { localStorage.setItem(PLACES_KEY, JSON.stringify(S.places)); } catch { /* private mode */ }
+  }
+
   // Language: ?lang=es in the URL, then the saved choice, then the browser's language.
   const urlLang = new URLSearchParams(location.search).get('lang');
   const browserLang = (navigator.language || 'en').toLowerCase().startsWith('es') ? 'es' : 'en';
@@ -593,6 +605,7 @@
       e.evtype !== 'earthquake' ? I18N.evtype(e.evtype) : null,
     ].filter(Boolean).join(' · ');
     const shaking = shakeHtml(e);
+    const within = T(`d.within.${S.period}`, { year: thisYear() });
 
     $('#detail').innerHTML = `
       <div class="d-head">
@@ -617,9 +630,9 @@
       <dl class="d-grid">
         <div${S.userLoc ? '' : ' class="wide"'}><dt>${T('d.yourTime')}</dt><dd>${F.localShort.format(e.t)}</dd></div>
         ${S.userLoc ? `<div><dt>${T('d.fromYou')}</dt><dd>${F.num(Math.round(distKm(S.userLoc, e)))} km</dd></div>` : ''}
-        <div class="wide"><dt>${T(`d.within.${S.period}`, { year: thisYear() })}</dt><dd>${nearbyEvents.n
-          ? esc(T('d.nearby', { n: nearbyEvents.n, mag: fmtMag(nearbyEvents.top.mag), ago: when(nearbyEvents.top.t) }))
-          : T('d.noNearby')}</dd></div>
+        <div class="wide"><dt>${T('d.area')}</dt><dd><span class="d-line">${esc(nearbyEvents.n
+          ? T('d.nearby', { n: nearbyEvents.n, mag: fmtMag(nearbyEvents.top.mag), ago: when(nearbyEvents.top.t), within })
+          : T('d.noNearby', { within }))}</span>${historyHtml(e)}</dd></div>
       </dl>
       <details class="d-more"${S.moreOpen ? ' open' : ''}>
         <summary>${T('d.more')}</summary>
@@ -633,6 +646,49 @@
       </details>
       ${wantsContext(e) ? `<section class="ctx" id="ctx" aria-labelledby="ctxTitle" aria-busy="false">${contextHtml(e)}</section>` : ''}`;
     document.title = `M${fmtMag(e.mag)} · ${placeOf(e)} · Sismo`;
+  }
+
+  // ---------------------------------------------------------------- history
+  /* "Nothing this strong within 100 km since the M6.2 of 12 Oct 2024": the most recent quake at
+     least as strong nearby, from the USGS catalog (back to 1900). It shares the "In the area" row
+     with recent activity rather than adding one. Below M4.5 the catalog is too patchy to say. */
+  const HISTORY_MIN = 4.5;
+  const historyKm = e => (magOf(e) < 5 ? 50 : magOf(e) < 7 ? 100 : 200);
+  const history = new Map();        // event id + position + magnitude → { done, failed, ev }
+  const historyEvents = new Map();  // id → an older quake linked from a history line
+
+  function historyHtml(e) {
+    if (magOf(e) < HISTORY_MIN) return '';
+    const key = [e.id, e.mag, e.lat, e.lon].join('|');
+    let h = history.get(key);
+    if (!h) {
+      h = { done: false, failed: false, ev: null };
+      history.set(key, h);
+      Sources.lastAsStrong(e, historyKm(e))
+        .then(ev => { h.ev = ev; if (ev) historyEvents.set(ev.id, ev); })
+        .catch(err => { h.failed = true; console.warn('history:', err.message); })
+        .finally(() => {
+          h.done = true;
+          const el = $('#history');
+          if (el && detailOpen() && S.selectedId === e.id) el.outerHTML = historyHtml(e);
+        });
+    }
+    if (!h.done || h.failed) return '<span id="history" hidden></span>';
+    const km = historyKm(e);
+    const text = h.ev
+      ? T('d.history', { km, quake: `<button class="d-link" data-act="history" data-id="${esc(h.ev.id)}">${esc(T('d.historyQuake', { mag: fmtMag(h.ev.mag), date: F.date.format(h.ev.t) }))}</button>` })
+      : esc(T('d.historyNone', { km }));
+    return `<span id="history" class="d-line" title="${esc(T('d.historySource'))}">${text}</span>`;
+  }
+
+  // Open an older quake from a history line. Pinned, so it stays even though it's outside the period.
+  function openHistoric(id) {
+    const ev = historyEvents.get(id);
+    if (!ev) return;
+    S.pinned = ev;
+    S.events.set(ev.id, ev);
+    refreshAll();
+    select(ev.id, { fly: true, via: 'history' });
   }
 
   // ---------------------------------------------------------------- reports and coverage (js/context.js)
@@ -753,7 +809,6 @@
     const f = shake.id === e.id ? shake.field : null;
     if (!f) return '';
     const top = Shaking.level(f.peak), mmi = T('mmi');
-    const here = S.userLoc ? f.at(S.userLoc.lon, S.userLoc.lat) : NaN;
     const scale = Shaking.ROMAN.slice(2).map((r, k) => {
       const L = k + 2;
       return `<span style="--c:${Shaking.PALETTE[L]}"${L > top ? ' class="off"' : ''} title="${esc(mmi[L])}">${r}</span>`;
@@ -767,9 +822,30 @@
         <label class="check"><input type="checkbox" data-act="shake-toggle"${S.layers.shaking ? ' checked' : ''}>${esc(T('shake.onMap'))}</label>
       </div>
       <div class="shake-scale" aria-hidden="true">${scale}</div>
-      <p>${esc(T('shake.peak', { i: intensity(f.peak) }))}${Number.isFinite(here) && here >= 1 ? ` · <b>${esc(T('shake.here', { i: intensity(here) }))}</b>` : ''}</p>
+      <p>${esc(T('shake.peak', { i: intensity(f.peak) }))}</p>
+      ${spotsHtml(e, f)}
       <p class="muted">${esc(source.filter(Boolean).join(' · '))}</p>
     </section>`;
+  }
+
+  /* Shaking where the visitor is and at their saved places: "Usted: IV (leve) · Casa: III (débil)".
+     Outside a ShakeMap's grid, the estimate fills in. Below II counts as not felt. */
+  function spotsHtml(e, f) {
+    const spots = [
+      ...(S.userLoc ? [{ name: T('shake.you'), ...S.userLoc }] : []),
+      ...S.places,
+    ];
+    if (!spots.length) return '';
+    let fallback;
+    const at = p => {
+      const v = f.at(p.lon, p.lat);
+      if (Number.isFinite(v)) return v;
+      fallback ??= Shaking.estimate(e);
+      return fallback?.at(p.lon, p.lat) ?? 0;
+    };
+    const felt = spots.map(p => ({ name: p.name, v: at(p) })).filter(p => p.v >= 1.5).sort((a, b) => b.v - a.v);
+    if (!felt.length) return `<p class="shake-spots muted">${esc(T('shake.notFelt', { places: S.places.length > 0 }))}</p>`;
+    return `<p class="shake-spots">${felt.slice(0, 4).map(p => `<b>${esc(p.name)}:</b> ${esc(intensity(p.v))}`).join(' · ')}</p>`;
   }
 
   // ---------------------------------------------------------------- sharing
@@ -1012,6 +1088,7 @@
     $('#toasts').prepend(el);
     while ($('#toasts').children.length > 3) $('#toasts').lastElementChild.remove();
     setTimeout(close, timeout);
+    return close;
   }
 
   function toastEvent(e) {
@@ -1250,8 +1327,9 @@
     setAttribution();
     renderTemblo();
     renderList();
+    renderPlaces(); // also re-renders an open detail
+    renderInstall();
     drawTimeline();
-    if (detailOpen()) renderDetail(S.events.get(S.selectedId));
     if (!$('#loading').hidden) $('#loadingText').textContent = loadingText();
   }
 
@@ -1340,6 +1418,89 @@
     { enableHighAccuracy: false, timeout: 10000 });
   });
 
+  // ---------------------------------------------------------------- saved places
+  /* Chips in the settings jump to each place; "Agregar" asks for a tap on the map and a name.
+     Markers on the map open a popup to remove the place. Detail views show the shaking there. */
+  const ICON_PLACE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-6.5 8 6.5M6.5 9.5V19h11V9.5"/></svg>';
+  const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+  let placeMarkers = [];
+
+  function renderPlaces() {
+    $('#places').innerHTML = S.places.map(p => `<button data-place="${esc(p.id)}">${ICON_PLACE}<span>${esc(p.name)}</span></button>`).join('')
+      + (S.places.length < MAX_PLACES ? `<button id="addPlace">${ICON_PLUS}<span>${esc(T(S.places.length ? 'places.add' : 'places.addFirst'))}</span></button>` : '');
+    placeMarkers.forEach(m => m.remove());
+    placeMarkers = S.places.map(p => {
+      const el = document.createElement('button');
+      el.className = 'place-mk';
+      el.setAttribute('aria-label', p.name);
+      el.innerHTML = `${ICON_PLACE}<span>${esc(p.name)}</span>`;
+      el.addEventListener('click', ev => { ev.stopPropagation(); placePopup(p); });
+      return new maplibregl.Marker({ element: el, anchor: 'left', offset: [-9, 0] }).setLngLat([p.lon, p.lat]).addTo(map);
+    });
+    if (detailOpen()) renderDetail(S.events.get(S.selectedId));
+  }
+
+  // Closed by the map's click handler, not MapLibre's: the same tap that picks a spot opens the form.
+  const popup = new maplibregl.Popup({ className: 'hover place-pop', offset: 14, closeButton: false, closeOnClick: false, maxWidth: '260px' });
+
+  function placePopup(p) {
+    const el = document.createElement('div');
+    el.innerHTML = `<b>${esc(p.name)}</b><div class="place-actions"><button class="btn" data-go>${esc(T('places.go'))}</button><button class="btn" data-remove>${esc(T('places.remove'))}</button></div>`;
+    el.querySelector('[data-go]').addEventListener('click', () => { popup.remove(); map.flyTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 9), offset: centerOffset() }); });
+    el.querySelector('[data-remove]').addEventListener('click', () => {
+      popup.remove();
+      S.places = S.places.filter(x => x.id !== p.id);
+      savePlaces(); renderPlaces();
+      track('place', { action: 'remove', count: S.places.length });
+    });
+    popup.setLngLat([p.lon, p.lat]).setDOMContent(el).addTo(map);
+  }
+
+  let picking = null; // { close } while waiting for a tap on the map
+  function startPicking() {
+    closeMenus();
+    stopPicking();
+    document.body.classList.add('picking');
+    const close = toast(`<div><b>${esc(T('places.pick'))}</b><span>${esc(T('places.pickHint'))}</span></div>`, { timeout: 60000, onClick: () => stopPicking() });
+    picking = { close, timer: setTimeout(stopPicking, 60000) };
+  }
+  function stopPicking() {
+    if (!picking) return;
+    clearTimeout(picking.timer);
+    picking.close();
+    picking = null;
+    document.body.classList.remove('picking');
+  }
+
+  function placeForm(lngLat) {
+    const el = document.createElement('form');
+    el.className = 'place-form';
+    el.innerHTML = `<label>${esc(T('places.name'))}<input name="name" maxlength="24" required autocomplete="off" placeholder="${esc(T('places.placeholder'))}"></label>
+      <div class="place-actions"><button class="btn primary" type="submit">${esc(T('places.save'))}</button><button class="btn" type="button" data-cancel>${esc(T('places.cancel'))}</button></div>`;
+    el.addEventListener('submit', ev => {
+      ev.preventDefault();
+      const name = el.name.value.trim().slice(0, 24);
+      if (!name) return;
+      S.places.push({ id: Date.now().toString(36), name, lat: +lngLat.lat.toFixed(4), lon: +lngLat.lng.toFixed(4) });
+      savePlaces(); renderPlaces();
+      popup.remove();
+      track('place', { action: 'add', count: S.places.length });
+    });
+    el.querySelector('[data-cancel]').addEventListener('click', () => popup.remove());
+    popup.setLngLat(lngLat).setDOMContent(el).addTo(map);
+    el.name.focus();
+  }
+
+  $('#places').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.id === 'addPlace') { track('place', { action: 'pick' }); startPicking(); return; }
+    const p = S.places.find(x => x.id === b.dataset.place);
+    if (!p) return;
+    closeMenus();
+    map.flyTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 9), offset: centerOffset(), duration: 1400 });
+  });
+
   const minMagInput = $('#minMag');
   minMagInput.addEventListener('input', () => {
     S.minMag = parseFloat(minMagInput.value);
@@ -1416,6 +1577,8 @@
       saveSettings(); drawShaking();
     }
     else if (act === 'ctx' && S.selectedId) track('context', { kind: el.dataset.kind, ...evInfo(S.events.get(S.selectedId)) });
+    else if (act === 'history') openHistoric(el.dataset.id);
+    else if (act === 'install') installApp();
   });
 
   // "More data" stays open for the next quake once opened (toggle doesn't bubble, so capture it).
@@ -1437,6 +1600,7 @@
   });
 
   document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && (picking || popup.isOpen())) { stopPicking(); popup.remove(); return; }
     if (e.target.closest('input, textarea')) return;
     if (e.code === 'Space') { e.preventDefault(); S.playing ? pause() : play({ via: 'key' }); }
     else if (e.key === 'Escape') closeDetail();
@@ -1461,6 +1625,8 @@
   map.on('dragstart', () => { if (isMobile()) closeMenus(); });
 
   map.on('click', ev => {
+    if (picking) { stopPicking(); placeForm(ev.lngLat); return; }
+    if (popup.isOpen()) { popup.remove(); return; }
     // On phones, a tap on the map first just closes an open menu.
     if (isMobile() && ($('#controls').classList.contains('open') || $('#rail').classList.contains('open'))) {
       closeMenus();
@@ -1490,11 +1656,43 @@
     moveTimer = setTimeout(() => { if (S.inView) { renderList(); computeBins(); drawTimeline(); } }, 120);
   });
 
+  // ---------------------------------------------------------------- installable app (sw.js, manifest.webmanifest)
+  /* The browser offers installing on its own (address bar, Android's banner). "About the data" also
+     has an Install button when the browser allows it, or the Add to Home Screen steps on iPhone. */
+  const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let installPrompt = null;
+  window.addEventListener('beforeinstallprompt', e => { installPrompt = e; renderInstall(); });
+  window.addEventListener('appinstalled', () => { installPrompt = null; track('install', { outcome: 'installed' }); renderInstall(); });
+
+  async function installApp() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    track('install', { outcome });
+    installPrompt = null;
+    renderInstall();
+  }
+
+  function renderInstall() {
+    const el = $('#install');
+    const show = !standalone() && (!!installPrompt || isIOS);
+    el.hidden = !show;
+    if (!show) return;
+    el.innerHTML = `<h3>${esc(T('install.h'))}</h3><p>${esc(T(installPrompt ? 'install.text' : 'install.ios'))}</p>
+      ${installPrompt ? `<button class="btn primary" data-act="install">${esc(T('install.btn'))}</button>` : ''}`;
+  }
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(err => console.warn('service worker:', err.message));
+  if (standalone()) window.addEventListener('load', () => track('launch', { mode: 'standalone' }));
+
   // ---------------------------------------------------------------- boot
   if (window.matchMedia('(max-width: 760px)').matches) $('#panel').classList.add('collapsed');
   window.sismo.refresh = () => refreshAll();
   syncControls();
   updateModeUI();
+  renderPlaces();
+  renderInstall();
 
   // Fetch events while the basemap is still loading; the map picks them up on 'load'.
   const firstLoad = loadData();

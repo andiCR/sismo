@@ -35,6 +35,9 @@ It puts Costa Rica's own agencies (OVSICORI-UNA and RSN-UCR, via EMSC) next to U
 - Map with magnitude-sized circles coloured by depth or age, a density heatmap, plate boundaries, Costa Rican volcanoes, labels, and a globe view.
 - Timeline histogram with scrubbing and replay. Event list with a minimum-magnitude filter, a map-view filter and sorting.
 - Event detail: the answer (magnitude, place, time and depth, one shaking figure), Share, then time and nearby activity. Costa Rica time, UTC, coordinates, energy and the full agency name are under "Más datos". Then reports and coverage.
+- Saved places: up to 6 named points ("Casa", "Mamá"), stored only in the browser. The detail shows the shaking at each one, and at the visitor's location, on one line of the shaking block. A settings row and map markers let people jump to them or remove them.
+- History line: for M4.5+ quakes, the "En la zona" row adds the most recent quake at least as strong nearby, from the USGS catalog back to 1900. It links to that older quake.
+- Installable app (PWA): a manifest, icons and a service worker that keeps the app shell for offline use. Quake data is never cached.
 - Year archive: a period option named after the current year, listing that year's notable quakes (M6.5+ worldwide, M4.5+ around Costa Rica; `Sources.isNotable`). It hides ¿Tembló?, which it can't answer, and is never remembered as the start view.
 - "¿Tembló?" banner: the latest likely-felt quake in Costa Rica or near the user. "Likely felt" is an estimate from magnitude and depth, not an official intensity.
 - Per-event share pages (`/e/<id>/`) with 1200×630 preview cards, a Share button and a WhatsApp button. Recent quakes get pages for 30 days; notable ones keep theirs.

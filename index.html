@@ -6,6 +6,11 @@
   <title>Sismo · Live Earthquake Map</title>
   <meta name="description" content="Live earthquake map for Costa Rica and the world, with data from OVSICORI, RSN-UCR, EMSC and USGS.">
   <meta name="theme-color" content="#141311">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="Sismo">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
@@ -64,6 +69,10 @@
             </button>
           </div>
         </div>
+        <div class="ctl-row">
+          <span class="ctl-label" data-i18n="ctl.places">Places</span>
+          <div class="chips" id="places" role="group" data-i18n-aria="places.label"></div>
+        </div>
       </div>
     </section>
 
@@ -102,6 +111,7 @@
         <p data-i18n-html="about.usgs"></p>
         <h3 data-i18n="about.plates.h">Plate boundaries</h3>
         <p data-i18n-html="about.plates"></p>
+        <div id="install" class="install" hidden></div>
         <h3 data-i18n="about.privacy.h">Privacy</h3>
         <p data-i18n-html="about.privacy"></p>
         <p class="note" data-i18n-html="about.note"></p>

@@ -17,7 +17,7 @@ Then open http://localhost:5173. Any static server works; `serve.ps1` exists bec
 
 The site is published with **GitHub Pages** by the workflow in `.github/workflows/pages.yml`. It runs on every push to `main` and every 10 minutes (GitHub sometimes starts scheduled runs a few minutes late). Each run:
 
-1. copies the app (`index.html`, `css/`, `js/`) into `_site/`
+1. copies the app (`index.html`, `css/`, `js/`, `icons/`, `manifest.webmanifest`, `sw.js`) into `_site/`, and renders the PNG app icons
 2. runs `scripts/build-site.mjs`, which creates a **share page for each recent quake** at `e/<id>/` (Costa Rica area M2.5+, anywhere M5+, last 30 days; the rule is `Sources.hasSharePage` in `js/sources.js`). **Notable quakes** (M6.5+ anywhere, M4.5+ around Costa Rica; `Sources.isNotable`) keep their page for good: each build also fetches them back to 1 January of the previous year from both catalogs, so a link shared months ago still shows its card. If that fetch fails, those older pages are missing until the next build, about 10 minutes later. Each page has Open Graph tags and a 1200×630 preview image, so links shared on WhatsApp, X or Telegram show a proper card. It also writes `e/manifest.json`, listing the pages and the magnitude on each card
 3. deploys `_site/` to Pages
 
@@ -102,6 +102,9 @@ Matching Costa Rican news articles to quakes was prototyped in the Worker (commi
 - Shaking gradient around the selected quake: the USGS ShakeMap when there is one, else a labeled estimate (see "Shaking on the map")
 - Toasts for new events in view (or any M5+ worldwide)
 - "Near me" shows distances to each event
+- **Saved places**: "Lugares" in the settings saves up to 6 named points (tap the map, give it a name). They're kept only in the browser (`localStorage`, `sismo:places`). A quake's shaking block shows the estimated or measured intensity at each one, and at your location after "Near me"; outside a ShakeMap's grid, the estimate fills in
+- **History line**: for M4.5+ quakes, "En la zona" adds the most recent quake at least as strong nearby (50 km below M5, 100 km below M7, else 200 km), from the USGS catalog back to 1900 (`Sources.lastAsStrong`). The older quake opens with a tap. Below M4.5 the catalog is too patchy to say
+- **Installable app (PWA)**: `manifest.webmanifest`, icons in `icons/` (the build renders the PNG sizes from the SVGs) and `sw.js`, which serves the page, styles and scripts from the network, falling back to its cache when offline. Quake data, tiles and fonts aren't cached. "About the data" shows an install button where the browser offers one, and the Add to Home Screen steps on iPhone. When a `sw.js` change must reach installed apps, bump `CACHE` in it
 - Settings are remembered, and the map position is kept in the URL hash so views can be shared
 - **"¿Tembló?" banner**: the latest quake in Costa Rica (or near you, after "Near me") that was likely felt. The estimate uses magnitude and depth
 - **Share pages**: every quake has its own link (`/e/<id>/`) with a preview card for WhatsApp and social media, plus Share and WhatsApp buttons in the detail view
@@ -117,7 +120,9 @@ Besides pageviews, `track()` in `js/app.js` sends these events:
 
 | Event | Data |
 |---|---|
-| `open-event` | `via`: `list`, `map`, `temblo` (plus banner `state`), `toast`, `timeline` or `link` (plus `shared`, see below); `mag` (rounded down), `cr`, `source` |
+| `open-event` | `via`: `list`, `map`, `temblo` (plus banner `state`), `toast`, `timeline`, `history` (the link in "En la zona") or `link` (plus `shared`, see below); `mag` (rounded down), `cr`, `source` |
+| `place` | `action`: `pick` (started adding), `add` or `remove`; `count` of saved places |
+| `install`, `launch` | `install`: `outcome` `accepted`, `dismissed` or `installed`. `launch`: the app was opened installed (`mode: standalone`) |
 | `share` | `method`: `native`, `copy` or `whatsapp`; `mag`, `cr`, `source` |
 | `official-report` | the agency link in the detail view was opened |
 | `replay`, `scrub` | timeline use |
@@ -155,6 +160,7 @@ The edit-time design check (hooks) is machine-local: it lives in the gitignored 
 - `js/context.js`: "Reports and coverage" in the detail view (RSN-UCR, USGS, EMSC witnesses, Wikipedia)
 - `js/shaking.js`: the selected quake's shaking gradient (USGS ShakeMap, or an estimate from magnitude, depth and distance)
 - `js/app.js`: map, layers, list, detail, timeline and replay
+- `manifest.webmanifest`, `sw.js`, `icons/`: the installable app (see Features)
 - `serve.ps1`: tiny local static server
 
 ## Ideas for next steps

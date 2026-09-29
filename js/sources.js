@@ -130,6 +130,22 @@ window.Sources = (() => {
     return [...byId.values()].sort((x, y) => (y.mag ?? 0) - (x.mag ?? 0) || y.t - x.t);
   }
 
+  /** The most recent quake at least as strong as `e` within `km`, before it, from the USGS catalog
+      (which goes back to 1900). null when there is none. */
+  async function lastAsStrong(e, km, signal) {
+    const q = new URLSearchParams({
+      format: 'geojson', eventtype: 'earthquake', orderby: 'time', limit: 1,
+      latitude: e.lat.toFixed(3), longitude: e.lon.toFixed(3), maxradiuskm: km,
+      minmagnitude: (e.mag - 0.05).toFixed(2), // as strong as shown, after rounding to one decimal
+      starttime: '1900-01-01',
+      endtime: new Date(e.t - 120e3).toISOString().slice(0, 19), // leave out this quake in either catalog
+    });
+    const j = await getJSON(`https://earthquake.usgs.gov/fdsnws/event/1/query?${q}`, signal);
+    const f = j.features?.[0];
+    const found = f ? fromUsgs(f) : null;
+    return found && valid(found) ? found : null;
+  }
+
   /* Live updates. EMSC pushes new/updated events over a WebSocket;
      USGS has no push channel, so poll its last-hour feed every minute. */
   function live(source, { onEvent, onStatus }) {
@@ -194,5 +210,5 @@ window.Sources = (() => {
   const NOTABLE = { world: 6.5, area: 4.5 };
   const isNotable = e => (e.mag ?? 0) >= NOTABLE.world || (inShareArea(e) && (e.mag ?? 0) >= NOTABLE.area);
 
-  return { fetchRecent, fetchEvent, fetchNotable, live, agency, fromEmsc, fromUsgs, SHARE_AREA, inShareArea, shareSlug, hasSharePage, NOTABLE, isNotable };
+  return { fetchRecent, fetchEvent, fetchNotable, lastAsStrong, live, agency, fromEmsc, fromUsgs, SHARE_AREA, inShareArea, shareSlug, hasSharePage, NOTABLE, isNotable };
 })();

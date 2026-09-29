@@ -285,6 +285,15 @@ input[type="range"] { width: 100%; margin: 4px 0; accent-color: var(--accent); b
 .shake-scale span.off { opacity: 0.22; }
 .shake p { margin: 0; color: #d4cec4; }
 .shake p b { font-weight: 600; color: var(--text); }
+.shake p.shake-spots { margin-top: 2px; }
+/* "In the area": recent activity and the long view, one sentence each */
+.d-line { display: block; }
+.d-line + .d-line { margin-top: 4px; }
+.d-link {
+  font: inherit; font-weight: 600; color: var(--accent-text);
+  text-decoration: underline; text-decoration-color: rgba(255, 154, 118, 0.4); text-underline-offset: 2px;
+}
+.d-link:hover { text-decoration-color: currentColor; }
 .shake p.muted { margin-top: 4px; font-size: 12px; color: var(--muted); max-width: 60ch; }
 .d-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .d-actions.d-share { margin-bottom: 16px; }
@@ -340,6 +349,8 @@ input[type="range"] { width: 100%; margin: 4px 0; accent-color: var(--accent); b
 
 #about h3 { font-size: 14px; font-weight: 650; margin: 18px 0 4px; }
 #about p { margin: 0 0 8px; color: #d4cec4; max-width: 62ch; }
+#about .install[hidden] { display: none; }
+#about .install .btn { margin-top: 4px; }
 #about .note { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 
 /* ---------- Layer tools (floating over the map) ---------- */
@@ -435,6 +446,30 @@ body.playing .play .i-pause { display: block; }
 .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib-inner { background: rgba(20, 19, 17, 0.75) !important; color: var(--muted); }
 .maplibregl-ctrl-attrib a { color: var(--muted); }
 .maplibregl-ctrl-attrib-button { filter: invert(1); }
+
+/* Saved places: a small house and its name, set like the map's own labels */
+.place-mk {
+  display: flex; align-items: center; gap: 4px; padding: 2px 4px 2px 0;
+  color: var(--text); font: 600 11.5px/1 Archivo, system-ui, sans-serif; cursor: pointer;
+  text-shadow: 0 0 3px rgba(20, 19, 17, 0.95), 0 0 6px rgba(20, 19, 17, 0.8);
+}
+.place-mk svg {
+  width: 18px; height: 18px; padding: 2px; flex: none;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: 4px;
+}
+.place-mk:hover svg { border-color: var(--text); }
+.place-pop .maplibregl-popup-content { padding: 10px 12px; }
+.place-pop b { display: block; margin-bottom: 8px; }
+.place-actions { display: flex; gap: 6px; }
+.place-actions .btn { padding: 6px 10px; font-size: 12px; }
+.place-form label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; color: var(--muted); }
+.place-form input {
+  width: 200px; padding: 7px 8px; border-radius: var(--r);
+  font: 13px Archivo, system-ui, sans-serif; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line-strong);
+}
+.place-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+body.picking #map canvas { cursor: crosshair !important; }
 
 .me {
   width: 16px; height: 16px; border-radius: 50%;
