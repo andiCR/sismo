@@ -1,7 +1,7 @@
 # Sismo: a live earthquake map
 
 A Windy-style map of seismic activity. It focuses on Costa Rica and works worldwide.
-It is a static site (HTML, CSS and JS) with no build step and no backend.
+It is a static site (HTML, CSS and JS) with no build step. The map needs no backend; a small Cloudflare Worker starts share-page builds and sends push notifications.
 
 **Live site:** https://sismo.cr/ (Spanish: https://sismo.cr/?lang=es)
 
@@ -11,7 +11,7 @@ It is a static site (HTML, CSS and JS) with no build step and no backend.
 powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 5173
 ```
 
-Then open http://localhost:5173. Any static server works; `serve.ps1` exists because this machine has no Node or Python.
+Then open http://localhost:5173. Any static server works; `serve.ps1` needs nothing installed. (If Windows has reserved port 5173, use another, for example `-Port 8123`.)
 
 ## Deploy
 
@@ -55,6 +55,34 @@ Setup (once; it runs on the Workers free plan):
 Site URL, repository and workflow are set in `worker/wrangler.toml`. `npm run logs` streams the Worker's logs (they are also in the Cloudflare dashboard). To try it locally, run `npm run dev` and open `http://localhost:8787/__scheduled`. Without a token it only logs what it would start.
 
 If the repository has no activity for 60 days, GitHub pauses the 10-minute schedule; re-enable it under the Actions tab. Builds started by the Worker are not affected.
+
+### Notifications (push)
+
+The same Worker sends push notifications and serves their API at `https://api.sismo.cr/push/…` (`worker/src/push.js`). The app's bell opens "Notificaciones": people pick regions (`Places.REGIONS` in `js/places.js`: Valle Central, Pacífico Norte, Pacífico Central, Pacífico Sur, Zona Norte, Caribe) and a level (IV+ or III+).
+
+- **When:** each cron run looks for quakes around Costa Rica (M3+, first seen within 30 minutes) and estimates the shaking at each region's towns (`js/shaking.js`). A region that reaches III gets a job; subscribers whose level it reaches get a push. The same quake from EMSC and USGS counts once.
+- **What the server keeps:** the browser's push endpoint, the regions, the level and the language. No location. The About panel says so.
+- **Pushes are empty.** The service worker (`sw.js`) asks `GET /push/latest?sub=<sha256 of the endpoint>` what to show ("Sismo M4.6 · Pacífico Central / Probablemente se sintió IV (leve) · 11 km al SO de Jacó · hace 6 min"), in the subscriber's language. There's nothing to encrypt, which keeps CPU per push tiny.
+- **Free plan batching:** a run may make 50 outgoing requests, so it sends at most `PUSH_BATCH` (35) pushes and the next run carries on. That's about 35 subscribers a minute. When reaching everyone takes more than `LAG_WARN_MIN` (5) minutes, measured after a notification or projected from the daily subscriber count, the Worker opens a GitHub issue ("Push notifications are slow to reach everyone"), or comments on it while it's open, at most once a day. That's the signal to move to Workers Paid and raise `PUSH_BATCH` to about 900.
+- iPhone only gets notifications in the installed app (iOS 16.4+), and the view explains that.
+
+Setup (once, from `worker/`, one command at a time in Windows PowerShell 5.1):
+
+```bash
+npx wrangler d1 create sismo-push
+```
+
+Put the `database_id` it prints into `worker/wrangler.toml`, then:
+
+```bash
+npm run db:init
+node scripts/vapid-keys.mjs | npx wrangler secret put VAPID_PRIVATE_JWK
+npm run deploy
+```
+
+The deploy also creates `api.sismo.cr` (DNS record and certificate), since sismo.cr's DNS is on Cloudflare. For the lag issue, add **Issues: Read and write** to the fine-grained `GITHUB_TOKEN` (without it, the warning only goes to the Worker's log). A new VAPID key invalidates every subscription, so generate it once.
+
+Locally: `npm run db:init:local`, put `VAPID_PRIVATE_JWK='<output of node scripts/vapid-keys.mjs>'` in `worker/.dev.vars` (gitignored), and `npm run dev`. On localhost, `js/config.js` points the app at `http://localhost:8787/`.
 
 It also works on any other static host (Netlify, Cloudflare Pages, Vercel). All data is fetched directly by the browser, and every source sends `Access-Control-Allow-Origin: *`.
 
@@ -104,6 +132,7 @@ Matching Costa Rican news articles to quakes was prototyped in the Worker (commi
 - "Near me" shows distances to each event
 - **Saved places**: "Lugares" in the settings saves up to 6 named points (tap the map, give it a name). They're kept only in the browser (`localStorage`, `sismo:places`). A quake's shaking block shows the estimated or measured intensity at each one, and at your location after "Near me"; outside a ShakeMap's grid, the estimate fills in
 - **History line**: for M4.5+ quakes, "En la zona" adds the most recent quake at least as strong nearby (50 km below M5, 100 km below M7, else 200 km), from the USGS catalog back to 1900 (`Sources.lastAsStrong`). The older quake opens with a tap. Below M4.5 the catalog is too patchy to say
+- **Notifications**: the bell in the header. Pick regions and a level, and get a push a few minutes after a quake that was probably felt there (see "Notifications (push)")
 - **Installable app (PWA)**: `manifest.webmanifest`, icons in `icons/` (the build renders the PNG sizes from the SVGs) and `sw.js`, which serves the page, styles and scripts from the network, falling back to its cache when offline. Quake data, tiles and fonts aren't cached. "About the data" shows an install button where the browser offers one, and the Add to Home Screen steps on iPhone. When a `sw.js` change must reach installed apps, bump `CACHE` in it
 - Settings are remembered, and the map position is kept in the URL hash so views can be shared
 - **"¿Tembló?" banner**: the latest quake in Costa Rica (or near you, after "Near me") that was likely felt. The estimate uses magnitude and depth
@@ -122,6 +151,7 @@ Besides pageviews, `track()` in `js/app.js` sends these events:
 |---|---|
 | `open-event` | `via`: `list`, `map`, `temblo` (plus banner `state`), `toast`, `timeline`, `history` (the link in "En la zona") or `link` (plus `shared`, see below); `mag` (rounded down), `cr`, `source` |
 | `place` | `action`: `pick` (started adding), `add` or `remove`; `count` of saved places |
+| `notify` | `action`: `open`, `on`, `update`, `off`, `test` or `error`; with `regions` (how many) and `level` on `on`/`update`. Notification taps arrive as `open-event` with `via: link` and `shared: push` |
 | `install`, `launch` | `install`: `outcome` `accepted`, `dismissed` or `installed`. `launch`: the app was opened installed (`mode: standalone`) |
 | `share` | `method`: `native`, `copy` or `whatsapp`; `mag`, `cr`, `source` |
 | `official-report` | the agency link in the detail view was opened |
@@ -155,7 +185,8 @@ The edit-time design check (hooks) is machine-local: it lives in the gitignored 
 - `js/places.js`: Costa Rican towns, for "25 km al SO de Quepos" descriptions
 - `scripts/share-kit.js`: share-card images (SVG) and share-page templating; runs in Node and in the browser
 - `scripts/build-site.mjs`: builds `_site/` with the share pages (used by the workflow)
-- `worker/`: Cloudflare Worker that starts a build as soon as a new quake needs a share page
+- `worker/`: Cloudflare Worker that starts a build as soon as a new quake needs a share page, and sends push notifications (`src/push.js`, `schema.sql`)
+- `js/config.js`: settings shared by the page and the service worker (the notification API address)
 - `js/sources.js`: data adapters (EMSC and USGS normalized to one event shape) and live feeds
 - `js/context.js`: "Reports and coverage" in the detail view (RSN-UCR, USGS, EMSC witnesses, Wikipedia)
 - `js/shaking.js`: the selected quake's shaking gradient (USGS ShakeMap, or an estimate from magnitude, depth and distance)
@@ -166,8 +197,7 @@ The edit-time design check (hooks) is machine-local: it lives in the gitignored 
 ## Ideas for next steps
 
 - **Merged source**: combine EMSC and USGS with de-duplication (same event if within ~30 s and ~50 km)
-- **Longer history**: the year archive covers the current year; earlier years, or any date range, would use the same `Sources.fetchNotable` query with an `endtime`- **Push notifications** for felt events near a saved location (needs a small backend or a service worker plus Web Push)
-- **Shaking layers**: USGS ShakeMap intensity contours for significant events
+- **Longer history**: the year archive covers the current year; earlier years, or any date range, would use the same `Sources.fetchNotable` query with an `endtime`- **Shaking layers**: USGS ShakeMap intensity contours for significant events
 - **Global volcanoes**: Smithsonian GVP Holocene volcano list
 - **Depth cross-section view** along a line (shows the subducting Cocos plate under Costa Rica)
 - **A small caching proxy** so every visitor doesn't hit EMSC directly (be a polite API citizen at scale)

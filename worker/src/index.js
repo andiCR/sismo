@@ -3,9 +3,14 @@
    Worker runs every minute instead: it looks for recent quakes that should have a share page
    (Sources.hasSharePage) but aren't in the deployed e/manifest.json, or whose magnitude changed
    since, and starts the Pages workflow. A build takes about a minute.
-   Without a GITHUB_TOKEN secret it only logs what it would do. */
+   Without a GITHUB_TOKEN secret it only logs what it would do.
+   It also sends push notifications and serves their API at api.sismo.cr (src/push.js). */
 import './window.js';
+import '../../js/i18n.js';
+import '../../js/places.js';
 import '../../js/sources.js';
+import '../../js/shaking.js';
+import * as push from './push.js';
 
 const { Sources } = globalThis;
 const EMSC_API = 'https://www.seismicportal.eu/fdsnws/event/1/query';
@@ -19,10 +24,18 @@ export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(run(env));
   },
+  fetch: (req, env) => push.handle(req, env),
 };
 
+// Notifications and the build trigger share the quake feeds but fail independently.
 export async function run(env) {
-  const [quakes, manifest] = await Promise.all([recentQuakes(), fetchManifest(env)]);
+  const quakes = await recentQuakes();
+  const results = await Promise.allSettled([push.tick(env, quakes), triggerBuild(env, quakes)]);
+  for (const r of results) if (r.status === 'rejected') console.error(r.reason?.stack || r.reason);
+}
+
+async function triggerBuild(env, quakes) {
+  const manifest = await fetchManifest(env);
   let due = quakes.filter(e => isDue(e, manifest));
   if (!due.length) return;
   if (await buildRunning(env)) {

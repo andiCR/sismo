@@ -1329,6 +1329,8 @@
     renderList();
     renderPlaces(); // also re-renders an open detail
     renderInstall();
+    renderNotify();
+    pushLanguage();
     drawTimeline();
     if (!$('#loading').hidden) $('#loadingText').textContent = loadingText();
   }
@@ -1579,6 +1581,9 @@
     else if (act === 'ctx' && S.selectedId) track('context', { kind: el.dataset.kind, ...evInfo(S.events.get(S.selectedId)) });
     else if (act === 'history') openHistoric(el.dataset.id);
     else if (act === 'install') installApp();
+    else if (act === 'push-save') pushSave();
+    else if (act === 'push-off') pushOff();
+    else if (act === 'push-test') pushTest();
   });
 
   // "More data" stays open for the next quake once opened (toggle doesn't bubble, so capture it).
@@ -1686,6 +1691,176 @@
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(err => console.warn('service worker:', err.message));
   if (standalone()) window.addEventListener('load', () => track('launch', { mode: 'standalone' }));
 
+  // ---------------------------------------------------------------- notifications (sw.js, worker/src/push.js)
+  /* "Notificaciones": the visitor picks regions and a level, and the Worker sends a push when a quake
+     was probably felt there, a few minutes after it. The server gets the browser's push endpoint,
+     the regions, the level and the language: never a location. */
+  const PUSH_API = window.SISMO_CONFIG?.pushApi || '';
+  const PUSH_KEY = 'sismo:push';
+  const push = (() => {
+    const base = { regions: [], level: 4, on: false };
+    try { return { ...base, ...JSON.parse(localStorage.getItem(PUSH_KEY)) }; } catch { return base; }
+  })();
+  let pushBusy = false, pushMsg = '';
+  const savePush = () => {
+    try { localStorage.setItem(PUSH_KEY, JSON.stringify({ regions: push.regions, level: push.level, on: push.on })); } catch { /* private mode */ }
+  };
+  const pushAvailable = () => !!PUSH_API && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const b64urlBytes = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  const zoneList = keys => keys.map(k => T(`zone.${k}`)).join(', ');
+
+  function pushBlocker() {
+    if (isIOS && !standalone()) return T('notify.iosInstall'); // iPhone: only installed apps get push
+    if (!pushAvailable()) return T('notify.unsupported');
+    if (Notification.permission === 'denied') return T('notify.denied');
+    return null;
+  }
+
+  async function pushApi(path, body) {
+    const r = await fetch(PUSH_API + path, body
+      ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      : { cache: 'no-store' });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    return j;
+  }
+
+  async function currentSub() {
+    const reg = await navigator.serviceWorker.ready;
+    return { reg, sub: await reg.pushManager.getSubscription() };
+  }
+
+  function renderNotify() {
+    $('#notifyBtn').setAttribute('aria-pressed', String(push.on));
+    const el = $('#notify');
+    const blocker = pushBlocker();
+    const dis = pushBusy ? ' disabled' : '';
+    el.innerHTML = `
+      <div class="d-head">
+        <button class="icon-btn" data-act="back" aria-label="${esc(T('back'))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <span>${esc(T('notify.title'))}</span>
+      </div>
+      <p class="n-intro">${esc(T('notify.intro'))}</p>
+      ${blocker ? `<p class="n-block">${esc(blocker)}</p>` : `
+        <fieldset class="n-set">
+          <legend>${esc(T('notify.regions'))}</legend>
+          <div class="n-zones">${Object.keys(Places.REGIONS).map(z => `<label class="check"><input type="checkbox" data-zone="${z}"${push.regions.includes(z) ? ' checked' : ''}>${esc(T(`zone.${z}`))}</label>`).join('')}</div>
+        </fieldset>
+        <fieldset class="n-set">
+          <legend>${esc(T('notify.level'))}</legend>
+          <div class="seg small" role="group">
+            <button type="button" data-level="4" aria-pressed="${push.level === 4}">${esc(T('notify.level4'))}</button>
+            <button type="button" data-level="3" aria-pressed="${push.level === 3}">${esc(T('notify.level3'))}</button>
+          </div>
+        </fieldset>
+        <div class="d-actions">
+          <button class="btn primary" data-act="push-save"${dis}>${esc(T(push.on ? 'notify.save' : 'notify.enable'))}</button>
+          ${push.on ? `<button class="btn" data-act="push-test"${dis}>${esc(T('notify.test'))}</button>` : ''}
+        </div>
+        ${push.on ? `<button class="n-off" data-act="push-off"${dis}>${esc(T('notify.disable'))}</button>` : ''}`}
+      <p class="n-status" role="status">${esc(pushMsg)}</p>
+      <p class="note">${esc(T('notify.note'))}</p>`;
+  }
+
+  async function pushSave() {
+    if (!push.regions.length) { pushMsg = T('notify.pickRegion'); renderNotify(); return; }
+    const wasOn = push.on;
+    pushBusy = true; pushMsg = '';
+    renderNotify();
+    try {
+      // First, while the tap still counts as the visitor's own action (Safari insists).
+      if (await Notification.requestPermission() !== 'granted') throw new Error(T('notify.denied'));
+      const { key } = await pushApi('push/key');
+      let { reg, sub } = await currentSub();
+      // A subscription made with an older server key can't receive pushes: renew it.
+      const old = sub?.options?.applicationServerKey;
+      if (sub && old && btoa(String.fromCharCode(...new Uint8Array(old))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') !== key) {
+        await sub.unsubscribe();
+        sub = null;
+      }
+      sub ||= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64urlBytes(key) });
+      await pushApi('push/subscribe', { subscription: sub.toJSON(), regions: push.regions, level: push.level, lang: S.lang });
+      push.on = true;
+      savePush();
+      pushMsg = T('notify.saved', { regions: zoneList(push.regions) });
+      track('notify', { action: wasOn ? 'update' : 'on', regions: push.regions.length, level: push.level });
+    } catch (err) {
+      pushMsg = T('notify.error', { msg: err.message });
+      track('notify', { action: 'error' });
+    }
+    pushBusy = false;
+    renderNotify();
+  }
+
+  async function pushOff() {
+    pushBusy = true;
+    renderNotify();
+    try {
+      const { sub } = await currentSub();
+      if (sub) {
+        await pushApi('push/unsubscribe', { endpoint: sub.endpoint }).catch(() => {}); // gone from the server either way once unsubscribed
+        await sub.unsubscribe();
+      }
+      push.on = false;
+      savePush();
+      pushMsg = T('notify.off');
+      track('notify', { action: 'off' });
+    } catch (err) {
+      pushMsg = T('notify.error', { msg: err.message });
+    }
+    pushBusy = false;
+    renderNotify();
+  }
+
+  async function pushTest() {
+    pushBusy = true;
+    renderNotify();
+    try {
+      const { sub } = await currentSub();
+      if (!sub) throw new Error(T('notify.noSub'));
+      await pushApi('push/test', { endpoint: sub.endpoint });
+      pushMsg = T('notify.testSent');
+      track('notify', { action: 'test' });
+    } catch (err) {
+      pushMsg = T('notify.error', { msg: err.message });
+    }
+    pushBusy = false;
+    renderNotify();
+  }
+
+  // Keep the server's copy of the language in step with the page's.
+  function pushLanguage() {
+    if (!push.on || !pushAvailable()) return;
+    currentSub().then(({ sub }) => sub && pushApi('push/subscribe', { subscription: sub.toJSON(), regions: push.regions, level: push.level, lang: S.lang }))
+      .catch(err => console.warn('notifications:', err.message));
+  }
+
+  $('#notify').addEventListener('change', e => {
+    const z = e.target.dataset.zone;
+    if (!z) return;
+    push.regions = e.target.checked ? [...new Set([...push.regions, z])] : push.regions.filter(x => x !== z);
+    pushMsg = '';
+  });
+  $('#notify').addEventListener('click', e => {
+    const lv = e.target.closest('[data-level]')?.dataset.level;
+    if (lv) { push.level = Number(lv); pushMsg = ''; renderNotify(); }
+  });
+  $('#notifyBtn').hidden = !PUSH_API;
+  $('#notifyBtn').addEventListener('click', () => {
+    const open = $('#panel').dataset.view !== 'notify';
+    if (open) { track('notify', { action: 'open' }); pushMsg = ''; renderNotify(); }
+    showView(open ? 'notify' : 'list');
+  });
+  // Notifications turned off outside the page (browser settings, a cleared site): show them as off.
+  if (push.on && pushAvailable()) {
+    currentSub().then(({ sub }) => {
+      if (sub && Notification.permission === 'granted') return;
+      push.on = false;
+      savePush();
+      renderNotify();
+    }).catch(() => {});
+  }
+
   // ---------------------------------------------------------------- boot
   if (window.matchMedia('(max-width: 760px)').matches) $('#panel').classList.add('collapsed');
   window.sismo.refresh = () => refreshAll();
@@ -1693,6 +1868,7 @@
   updateModeUI();
   renderPlaces();
   renderInstall();
+  renderNotify();
 
   // Fetch events while the basemap is still loading; the map picks them up on 'load'.
   const firstLoad = loadData();

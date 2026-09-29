@@ -283,6 +283,11 @@ The detail answers first and then gets out of the way. In order:
 - A "Lugares" settings row after "Ir a": each place is a text option with a small house icon (same style as the region jumps), and the last option is "Guardar un lugar" (then "Agregar"). Adding one works in two steps: a toast asks for a tap on the map, then a map popup asks for the name.
 - On the map, a place is an 18px house icon on a Drum Black tile with a Hairline Strong border, and its name next to it in 11.5px/600 Chart Ink with a dark halo, like the basemap's labels. It's square, not round: circles belong to quakes.
 
+### Notifications
+- A bell icon button in the brand row, Trace Orange when notifications are on (no badge or dot). It opens a panel view like "Sobre los datos": a short intro that says it arrives after the shaking and isn't an official alert, a "Regiones" checkbox grid (two columns), a "Avisarme cuando se sintió" setting with two options, one primary button, "Enviar una de prueba" as secondary, and "Desactivar" as a quiet text link. The privacy note closes the view in Graphite.
+- When the browser can't take notifications (iPhone outside the installed app, blocked, unsupported), one plain Drum Black Raised note replaces the form and says what to do.
+- The notification itself: "Sismo M4.6 · Pacífico Central" / "Probablemente se sintió IV (leve) · 11 km al SO de Jacó · hace 6 min". No exclamation marks, no "alerta", no instructions.
+
 ### Installable app
 - No banners or install prompts on the map. The browser's own install affordance does the work; "Sobre los datos" has one short install section (a primary button where the browser allows it, or the Add to Home Screen steps on iPhone). It's hidden when already installed.
 - App icon: the seismogram trace in Trace Orange on Drum Black. `icons/icon.svg` has rounded corners; `icons/maskable.svg` is full bleed with the trace inside the safe zone.

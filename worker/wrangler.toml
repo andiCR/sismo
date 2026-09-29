@@ -1,9 +1,15 @@
-# Build trigger for the share pages (see src/index.js and the README's "Deploy" section).
-# Secret, not in this file: GITHUB_TOKEN (`npx wrangler secret put GITHUB_TOKEN`).
+# Build trigger for the share pages, and push notifications (see src/index.js, src/push.js and the
+# README's "Deploy" and "Notifications" sections).
+# Secrets, not in this file: GITHUB_TOKEN (`npx wrangler secret put GITHUB_TOKEN`) and
+# VAPID_PRIVATE_JWK (`node scripts/vapid-keys.mjs | npx wrangler secret put VAPID_PRIVATE_JWK`).
 name = "sismo-build-trigger"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
-workers_dev = false # no public URL: it only runs on the schedule
+workers_dev = false
+
+# The notification API used by the app and its service worker. sismo.cr's DNS is on Cloudflare,
+# so this creates the DNS record and certificate on deploy.
+routes = [{ pattern = "api.sismo.cr", custom_domain = true }]
 
 [triggers]
 crons = ["* * * * *"]
@@ -13,6 +19,18 @@ SITE_URL = "https://sismo.cr/"
 GITHUB_REPO = "andiCR/sismo"
 GITHUB_WORKFLOW = "pages.yml"
 GITHUB_REF = "main"
+# Pushes per cron run. The free plan allows 50 outgoing requests per run and the feeds and GitHub
+# use up to ~10, so 35 leaves room. On Workers Paid, raise it to about 900.
+PUSH_BATCH = "35"
+# Open a GitHub issue when reaching every subscriber takes longer than this (minutes).
+LAG_WARN_MIN = "5"
+
+# Subscribers and notification jobs. Create once with `npx wrangler d1 create sismo-push`, put the
+# id it prints here, then `npm run db:init`.
+[[d1_databases]]
+binding = "DB"
+database_name = "sismo-push"
+database_id = "1a2d428f-3f03-4a00-afd3-fa4844223936"
 
 [observability]
 enabled = true

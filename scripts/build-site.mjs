@@ -67,6 +67,7 @@ for (const p of ['index.html', 'css', 'js', 'icons', 'manifest.webmanifest', 'sw
 for (const [src, out, size] of [
   ['icon.svg', 'icon-192.png', 192], ['icon.svg', 'icon-512.png', 512],
   ['maskable.svg', 'maskable-512.png', 512], ['maskable.svg', 'apple-touch-icon.png', 180],
+  ['badge.svg', 'badge-96.png', 96],
 ]) {
   const svg = await fs.readFile(path.join(ROOT, 'icons', src), 'utf8');
   await fs.writeFile(path.join(OUT, 'icons', out), new Resvg(svg, { fitTo: { mode: 'width', value: size } }).render().asPng());

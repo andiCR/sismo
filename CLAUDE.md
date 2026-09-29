@@ -18,4 +18,5 @@ The same goes for the list, the timeline and share cards: prefer one clear figur
 
 - Static site, no build step for the app: `index.html`, `css/style.css`, `js/*.js`. Share pages are built in CI by `scripts/build-site.mjs` (see README).
 - All UI copy is in `js/i18n.js` in Spanish and English. Spanish comes first and is longer, so check layouts with it.
-- This machine has Windows PowerShell 5.1 and no Node or Python. Serve locally with `serve.ps1`.
+- This machine has Windows PowerShell 5.1 and Node 24 (no Python). Serve locally with `serve.ps1`; Windows reserves port 5173 here, so use another (for example 8123). In PowerShell, call `npx.cmd`/`npm.cmd`: script execution is disabled for `npx.ps1`.
+- `worker/` is a Cloudflare Worker: the build trigger and push notifications (`src/push.js`). `npm run dev` there runs it locally with a local D1 database.

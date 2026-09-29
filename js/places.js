@@ -59,5 +59,19 @@ window.Places = (() => {
     return n.country === 'CR' ? n.name : `${n.name}, ${tr(COUNTRY[n.country])}`;
   }
 
-  return { TOWNS, nearest, label, distKm };
+  /* Regions people can get notifications for (worker/src/push.js). Only the region keys leave the
+     browser, never a location. A quake's shaking in a region is the strongest estimate at any of
+     its towns. Names are in js/i18n.js as zone.<key>. */
+  const REGION_TOWNS = {
+    vc: ['San José', 'Alajuela', 'Heredia', 'Cartago', 'Turrialba', 'San Ramón'],
+    pn: ['Liberia', 'Nicoya', 'Santa Cruz', 'Tamarindo', 'Sámara', 'Nosara', 'La Cruz', 'Cañas', 'Tilarán', 'Bagaces'],
+    pc: ['Puntarenas', 'Jacó', 'Quepos', 'Parrita', 'Orotina', 'Montezuma', 'Paquera'],
+    ps: ['San Isidro de El General', 'Uvita', 'Palmar Norte', 'Buenos Aires', 'Golfito', 'Puerto Jiménez', 'Ciudad Neily', 'San Vito'],
+    zn: ['Ciudad Quesada', 'La Fortuna', 'Upala', 'Los Chiles'],
+    ca: ['Limón', 'Guápiles', 'Siquirres', 'Cahuita', 'Puerto Viejo'],
+  };
+  const REGIONS = Object.fromEntries(Object.entries(REGION_TOWNS)
+    .map(([k, names]) => [k, names.map(n => TOWNS.find(t => t.name === n)).filter(Boolean)]));
+
+  return { TOWNS, REGIONS, nearest, label, distKm };
 })();
