@@ -34,9 +34,10 @@ It puts Costa Rica's own agencies (OVSICORI-UNA and RSN-UCR, via EMSC) next to U
 
 - Map with magnitude-sized circles coloured by depth or age, a density heatmap, plate boundaries, Costa Rican volcanoes, labels, and a globe view.
 - Timeline histogram with scrubbing and replay. Event list with a minimum-magnitude filter, a map-view filter and sorting.
-- Event detail: local and Costa Rica time, depth class, energy, nearby activity, and a link to the official report.
+- Event detail: the answer (magnitude, place, time and depth, one shaking figure), Share, then time and nearby activity. Costa Rica time, UTC, coordinates, energy and the full agency name are under "Más datos". Then reports and coverage.
+- Year archive: a period option named after the current year, listing that year's notable quakes (M6.5+ worldwide, M4.5+ around Costa Rica; `Sources.isNotable`). It hides ¿Tembló?, which it can't answer, and is never remembered as the start view.
 - "¿Tembló?" banner: the latest likely-felt quake in Costa Rica or near the user. "Likely felt" is an estimate from magnitude and depth, not an official intensity.
-- Per-event share pages (`/e/<id>/`) with 1200×630 preview cards, a Share button and a WhatsApp button.
+- Per-event share pages (`/e/<id>/`) with 1200×630 preview cards, a Share button and a WhatsApp button. Recent quakes get pages for 30 days; notable ones keep theirs.
 - Spanish and English. Place names from EMSC and USGS are translated.
 - Current implementation: a static site (HTML, CSS, JS) with no backend. Only the share-page build uses Node (in CI). This describes the code today; it wasn't set as a binding constraint.
 - Magnitudes and locations are preliminary and can be revised by the agencies.
@@ -58,6 +59,7 @@ It puts Costa Rica's own agencies (OVSICORI-UNA and RSN-UCR, via EMSC) next to U
 2. **Trust through accuracy, not authority.** Show sources, preliminary status and estimates honestly instead of borrowing an official look.
 3. **Local by default, global when asked.** Costa Rica and Costa Rican references come first; the world is one tap away.
 4. **Built to be shared.** A shared link and its card must stand alone for someone who has never seen the site.
+5. **Say it once.** Every fact appears once per view, in its most useful form. When a measurement exists, it replaces the estimate instead of sitting next to it. Specialist data goes behind "Más datos" rather than in front of the quick answer. A new feature earns its place by replacing or folding into something that's already there. It doesn't get to add another block of text. (The detail view's budget is in DESIGN.md under "Quake detail".)
 
 ## Accessibility & Inclusion
 

@@ -247,7 +247,7 @@ Crisp and slightly softened. Buttons, floating tools and alerts use 6px corners.
 ### Buttons
 - **Shape:** gently softened (6px).
 - **Primary:** Trace Orange with Trace Ink text, weight 600, 8px × 12px padding. Hover lightens to #ff7d55. Use it for one action per view (Share).
-- **Secondary:** transparent with a Hairline Strong outline and Chart Ink text. Hover fills Drum Black Raised. Used for Zoom to epicenter and Official report.
+- **Secondary:** transparent with a Hairline Strong outline and Chart Ink text. Hover fills Drum Black Raised. Used sparingly; the detail view has none (Zoom and Official report sit in its head as an icon button and a text link).
 - **WhatsApp:** the secondary shape with a green outline (rgba(95, 211, 141, 0.35)) and #7fe0a6 text.
 - **Focus:** a 2px Trace Orange outline, 2px offset, on every interactive element.
 
@@ -265,8 +265,22 @@ Crisp and slightly softened. Buttons, floating tools and alerts use 6px corners.
 - **Now state** (a felt quake in the last hour): an Accent Soft fill (rgba(255, 106, 61, 0.14)), with the answer line in Trace Orange Text. **Calm state:** a Field Green dot with no figure.
 
 ### Quake detail
-- A back button and agency, then the Figure Display magnitude with its dot and magnitude type. After that: the Title place, the "near" line in Trace Orange Text, and the time ago.
-- Actions (Share, WhatsApp), then a two-column label/value grid under a hairline, then the effects paragraph under a hairline, then the secondary actions.
+The detail answers first and then gets out of the way. In order:
+1. **Head:** back, the agency's short name (full name in its title), a zoom-to-epicenter icon button, and "Reporte oficial ↗" as a quiet text link. No outlined secondary buttons.
+2. **Hero:** the Figure Display magnitude with its dot and type, the Title place, the "near" line in Trace Orange Text, then one Graphite line: when (time ago for the first week, a date after that) · depth with its class.
+3. Tsunami or PAGER alerts, only when the catalogue flags one.
+4. **Share and WhatsApp.**
+5. **Shaking:** one block with the Mercalli scale, one headline figure ("Hasta VI cerca del epicentro", plus "IV donde usted está" in Chart Ink when known) and one source line (the model or ShakeMap, plus the "¿Lo sintió?" count). When a quake has no shaking field, the "typical effects" sentence takes its place. The two never appear together.
+6. **Facts grid:** local time (full width unless distance-from-you is known) and nearby activity.
+7. **"Más datos"** (a native `details`, closed by default and kept open for the session once opened): Costa Rica time for visitors outside Costa Rica, UTC with seconds, coordinates, energy, and the full agency name.
+8. **Informes y cobertura:** the RSN-UCR report, USGS impact statements, and non-green PAGER levels the banner didn't already show. The Wikipedia card, then a single line of links (EMSC witness reports, photos, USGS). The section is left out when it finds nothing and the quake is more than 2 hours old.
+
+**The Say-It-Once Rule.** A figure appears once in the detail view. Don't show the ShakeMap maximum, the strongest "¿Lo sintió?" report and the model peak side by side: pick one headline and name the others as its source. Don't restate something the head, hero or alerts already say. When measured data exists, the estimate goes.
+
+**The Detail Budget Rule.** Everything above "Más datos" must earn its place for someone on a phone who just felt shaking. Anything new goes under "Más datos" or into "Informes y cobertura" unless it replaces or merges with something above. The rule of thumb: on a 375×812 phone, the open sheet shows everything from the magnitude through the shaking figure without scrolling. Specialist data never gets its own heading or box.
+
+### Year archive
+- A fourth period option named after the current year (for example "2026"), styled like the other settings options. Its list holds only notable quakes (`Sources.isNotable`). Rows show the date instead of the time ago, and one Graphite line under the filters says what "notable" means. ¿Tembló? is hidden, because the archive can't answer "did it just shake?". The timeline runs from 1 January to now with month ticks.
 
 ### Timeline
 - A docked bar with a round 36px Trace Orange play button, a speed pill and a canvas histogram. Played bins are orange (rgba(255, 150, 105, 0.8)) and unplayed ones translucent. Magnitude markers use depth colours. The cursor is Field Green when live and Amber while replaying.
@@ -299,3 +313,4 @@ Crisp and slightly softened. Buttons, floating tools and alerts use 6px corners.
 - **Don't** use cool navy or blue-grey neutrals.
 - **Don't** imitate official alerts: no siren-red full-width banners, no warning iconography beyond the tsunami and PAGER notes, and no OVSICORI, RSN-UCR or CNE colours or logos. Sismo is not an alert service.
 - **Don't** use bounce or elastic easing, or animate anything that isn't a state change.
+- **Don't** add a block, heading or row to the quake detail without removing or merging one (The Detail Budget Rule). Don't show the same figure twice in one view, and don't show an estimate next to the measurement that replaces it (The Say-It-Once Rule).

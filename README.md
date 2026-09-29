@@ -18,7 +18,7 @@ Then open http://localhost:5173. Any static server works; `serve.ps1` exists bec
 The site is published with **GitHub Pages** by the workflow in `.github/workflows/pages.yml`. It runs on every push to `main` and every 10 minutes (GitHub sometimes starts scheduled runs a few minutes late). Each run:
 
 1. copies the app (`index.html`, `css/`, `js/`) into `_site/`
-2. runs `scripts/build-site.mjs`, which creates a **share page for each recent quake** at `e/<id>/` (Costa Rica area M2.5+, anywhere M5+, last 30 days; the rule is `Sources.hasSharePage` in `js/sources.js`), each with Open Graph tags and a 1200×630 preview image, so links shared on WhatsApp, X or Telegram show a proper card. It also writes `e/manifest.json`, listing the pages and the magnitude on each card
+2. runs `scripts/build-site.mjs`, which creates a **share page for each recent quake** at `e/<id>/` (Costa Rica area M2.5+, anywhere M5+, last 30 days; the rule is `Sources.hasSharePage` in `js/sources.js`). **Notable quakes** (M6.5+ anywhere, M4.5+ around Costa Rica; `Sources.isNotable`) keep their page for good: each build also fetches them back to 1 January of the previous year from both catalogs, so a link shared months ago still shows its card. If that fetch fails, those older pages are missing until the next build, about 10 minutes later. Each page has Open Graph tags and a 1200×630 preview image, so links shared on WhatsApp, X or Telegram show a proper card. It also writes `e/manifest.json`, listing the pages and the magnitude on each card
 3. deploys `_site/` to Pages
 
 The build needs Node 20+ and has one dependency (`@resvg/resvg-js`, for SVG to PNG):
@@ -97,7 +97,8 @@ Matching Costa Rican news articles to quakes was prototyped in the Worker (commi
 - Density heatmap, plate boundaries, Costa Rican volcanoes, magnitude labels
 - Timeline histogram at the bottom: drag to scrub, or press play (or Space) to replay the period
 - Event list filtered to the map view; sort by latest or strongest; minimum-magnitude slider
-- Event details: local time and Costa Rica time, depth class, energy in TNT, nearby activity, link to the official report
+- Event details, answer first: magnitude, place, time and depth, one shaking figure, Share. Then local time and nearby activity, with Costa Rica time, UTC, coordinates, energy and the full agency name under "Más datos". See "Don't clutter the views" in `CLAUDE.md`
+- **Year archive**: the period option named after the current year lists this year's notable quakes (M6.5+ worldwide, M4.5+ around Costa Rica), fetched from the EMSC or USGS FDSN API. The map, list, timeline (with month ticks) and replay all work on it. ¿Tembló? is hidden there, and the app never opens in this mode on a later visit
 - Shaking gradient around the selected quake: the USGS ShakeMap when there is one, else a labeled estimate (see "Shaking on the map")
 - Toasts for new events in view (or any M5+ worldwide)
 - "Near me" shows distances to each event
@@ -130,7 +131,7 @@ Share links carry `?s=wa` (WhatsApp button), `?s=sh` (native share sheet) or `?s
 
 ## Design guidance (Impeccable)
 
-UI work with AI agents follows [Impeccable](https://impeccable.style) (skill v4.3.1), vendored in `.claude/skills/impeccable/` with its agents in `.claude/agents/`. `PRODUCT.md` records who the site is for and what design must never compromise (for example, it must never look like an official alert service). Use `/impeccable` in Claude Code for its commands (`critique`, `audit`, `polish`, …).
+UI work with AI agents follows [Impeccable](https://impeccable.style) (skill v4.3.1), vendored in `.claude/skills/impeccable/` with its agents in `.claude/agents/`. `PRODUCT.md` records who the site is for and what design must never compromise (for example, it must never look like an official alert service, and every fact is said once). `DESIGN.md` holds the visual system, including the quake detail's layout budget. `CLAUDE.md` gives any AI assistant a short checklist against cluttering the views. Use `/impeccable` in Claude Code for its commands (`critique`, `audit`, `polish`, …).
 
 Its launcher needs no Node: on first use it downloads the matching engine binary from the project's GitHub releases into `~/.impeccable/bin/`, verified against a SHA-256 checksum. Scan for AI-UI anti-patterns with:
 
@@ -159,8 +160,7 @@ The edit-time design check (hooks) is machine-local: it lives in the gitignored 
 ## Ideas for next steps
 
 - **Merged source**: combine EMSC and USGS with de-duplication (same event if within ~30 s and ~50 km)
-- **Longer history**: query the FDSN APIs by date range and map bounds for years of data (both support `starttime`, `endtime`, `minlatitude` and similar parameters)
-- **Push notifications** for felt events near a saved location (needs a small backend or a service worker plus Web Push)
+- **Longer history**: the year archive covers the current year; earlier years, or any date range, would use the same `Sources.fetchNotable` query with an `endtime`- **Push notifications** for felt events near a saved location (needs a small backend or a service worker plus Web Push)
 - **Shaking layers**: USGS ShakeMap intensity contours for significant events
 - **Global volcanoes**: Smithsonian GVP Holocene volcano list
 - **Depth cross-section view** along a line (shows the subducting Cocos plate under Costa Rica)

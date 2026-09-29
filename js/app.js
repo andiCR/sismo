@@ -7,7 +7,9 @@
   const HOUR = 36e5, DAY = 864e5;
 
   // ---------------------------------------------------------------- config
-  const PERIODS = { '24h': DAY, '7d': 7 * DAY, '30d': 30 * DAY };
+  // 'year' is the archive: this calendar year's notable quakes (Sources.isNotable), not every quake.
+  const yearStart = () => new Date(new Date().getFullYear(), 0, 1).getTime();
+  const PERIODS = { '24h': DAY, '7d': 7 * DAY, '30d': 30 * DAY, get year() { return Date.now() - yearStart(); } };
   const REGIONS = {
     cr: { bounds: [[-86.1, 7.9], [-82.5, 11.3]] },
     ca: { bounds: [[-93.5, 6.5], [-76.5, 18.5]] },
@@ -59,7 +61,9 @@
     events: new Map(), cursor: null, playing: false, speed: 1,
     selectedId: null, userLoc: null, recentCount: 0,
   };
-  if (!PERIODS[S.period]) S.period = DEFAULTS.period;
+  if (!PERIODS[S.period] || S.period === 'year') S.period = DEFAULTS.period;
+  S.basePeriod = S.period; // the last live period; the archive is never remembered as the start view
+  const isYear = () => S.period === 'year';
 
   // Language: ?lang=es in the URL, then the saved choice, then the browser's language.
   const urlLang = new URLSearchParams(location.search).get('lang');
@@ -81,7 +85,8 @@
   } catch { /* ignore malformed data */ }
 
   function saveSettings() {
-    const { source, period, colorBy, inView, sort, globe, layers, lang } = S;
+    const { source, colorBy, inView, sort, globe, layers, lang } = S;
+    const period = S.basePeriod;
     const minMag = S.savedMinMag ?? S.minMag; // a shared link's temporary filter isn't remembered
     try { localStorage.setItem('sismo:settings', JSON.stringify({ source, period, minMag, colorBy, inView, sort, globe, layers, lang })); } catch { /* private mode */ }
   }
@@ -110,10 +115,13 @@
       loc,
       local: new Intl.DateTimeFormat(loc, { dateStyle: 'medium', timeStyle: 'medium' }),
       cr: new Intl.DateTimeFormat(loc, { timeZone: 'America/Costa_Rica', dateStyle: 'medium', timeStyle: 'short' }),
-      utc: new Intl.DateTimeFormat(loc, { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' }),
+      localShort: new Intl.DateTimeFormat(loc, { dateStyle: 'medium', timeStyle: 'short' }),
+      utc: new Intl.DateTimeFormat(loc, { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'medium' }),
       cursor: new Intl.DateTimeFormat(loc, { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
       weekday: new Intl.DateTimeFormat(loc, { weekday: 'short', day: 'numeric' }),
       monthDay: new Intl.DateTimeFormat(loc, { month: 'short', day: 'numeric' }),
+      month: new Intl.DateTimeFormat(loc, { month: 'short' }),
+      date: new Intl.DateTimeFormat(loc, { dateStyle: 'medium' }),
       num: n => n.toLocaleString(loc),
     };
   }
@@ -127,6 +135,8 @@
     if (s < 86400) return T('ago.h', { n: Math.floor(s / 3600) });
     return T('ago.d', { n: Math.floor(s / 86400) });
   }
+  // "hace 3 días" while that's easy to picture, a date after a week (archive rows, older shared links).
+  const when = t => (Date.now() - t < 7 * DAY ? ago(t) : F.date.format(t));
 
   function distKm(a, b) {
     const R = 6371, r = Math.PI / 180;
@@ -320,7 +330,7 @@
     });
 
     map.addLayer({
-      id: 'selected', type: 'circle', source: 'quakes', filter: ['==', ['get', 'id'], ''],
+      id: 'selected', type: 'circle', source: 'quakes', filter: ['==', ['get', 'id'], S.selectedId || ''],
       paint: { 'circle-radius': radius(6), 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5 },
     });
 
@@ -444,9 +454,11 @@
   async function loadData({ silent = false } = {}) {
     loadCtl?.abort();
     const ctl = loadCtl = new AbortController();
-    if (!silent) setLoading(T('loadingData', { period: T(`periodLong.${S.period}`), source: S.source }));
+    if (!silent) setLoading(loadingText());
     try {
-      const evs = await Sources.fetchRecent(S.source, PERIODS[S.period], ctl.signal);
+      const evs = isYear()
+        ? await Sources.fetchNotable(S.source, yearStart(), ctl.signal)
+        : await Sources.fetchRecent(S.source, PERIODS[S.period], ctl.signal);
       if (ctl.signal.aborted) return;
       S.events = new Map(evs.map(e => [e.id, e]));
       if (S.pinned) {
@@ -463,6 +475,11 @@
       if (loadCtl === ctl) setLoading(null);
     }
   }
+
+  const thisYear = () => new Date().getFullYear();
+  const loadingText = () => (isYear()
+    ? T('loadingYear', { year: thisYear(), source: S.source })
+    : T('loadingData', { period: T(`periodLong.${S.period}`), source: S.source }));
 
   function setLoading(text) {
     $('#loading').hidden = !text;
@@ -483,6 +500,7 @@
 
   function onLiveEvent(e, action) {
     if (Date.now() - e.t > PERIODS[S.period]) return;
+    if (isYear() && !Sources.isNotable(e)) return;
     const isNew = !S.events.has(e.id);
     S.events.set(e.id, e);
     scheduleRefresh();
@@ -506,7 +524,7 @@
   }
 
   function metaLine(e) {
-    const parts = [ago(e.t)];
+    const parts = [isYear() ? F.monthDay.format(e.t) : ago(e.t)];
     if (e.depth != null) parts.push(T('depthKm', { n: Math.round(e.depth) }));
     if (S.userLoc) parts.push(T('awayKm', { n: F.num(Math.round(distKm(S.userLoc, e))) }));
     parts.push(Sources.agency(e).short);
@@ -520,8 +538,10 @@
     evs.sort(S.sort === 'mag' ? (a, b) => magOf(b) - magOf(a) || b.t - a.t : (a, b) => b.t - a.t);
 
     $('#listCount').textContent = F.num(evs.length);
-    $('#summary').innerHTML = T('summary', { n: evs.length, count: F.num(evs.length), inView: S.inView })
+    $('#summary').innerHTML = T(isYear() ? 'summary.year' : 'summary', { n: evs.length, count: F.num(evs.length), inView: S.inView, year: thisYear() })
       + (strongest ? ` · ${T('strongest')} <b>M${fmtMag(strongest.mag)}</b>` : '');
+    $('#yearNote').hidden = !isYear();
+    if (isYear()) $('#yearNote').textContent = T('year.note', { year: thisYear(), world: Sources.NOTABLE.world, area: Sources.NOTABLE.area });
 
     const crTitle = esc(T('crTag'));
     $('#list').innerHTML = evs.slice(0, 250).map(e => {
@@ -549,29 +569,43 @@
     return { n, top };
   }
 
+  /* The quake detail. It answers "how strong, where, how deep, how hard did it shake" and offers
+     Share, then gets out of the way. Keep it that way (DESIGN.md, "Quake detail"):
+     - Say each fact once. One shaking figure, not ShakeMap + "Did You Feel It?" + a magnitude rule of thumb.
+     - Measured beats estimated: the generic "typical effects" line only shows when there's no shaking block.
+     - Specialist data (UTC, coordinates, energy, full agency name) goes under "More data".
+     - A new block must replace or fold into an existing one; if it can't, it goes under "More data". */
   function renderDetail(e) {
     const a = Sources.agency(e);
     const near = nearOf(e);
     const nearbyEvents = nearby(e);
     const url = safeUrl(e.url);
-    const inCR = userTZ === 'America/Costa_Rica';
+    const tzCR = userTZ === 'America/Costa_Rica';
     const waiting = shareWaiting(e);
     watchSharePage(e);
     updateShaking(e);
     const alerts = [];
     if (e.tsunami) alerts.push(T('alert.tsunami'));
     if (e.alert && e.alert !== 'green') alerts.push(T('alert.pager', { level: e.alert }));
+    const sub = [
+      when(e.t),
+      e.depth != null ? T('d.depthLine', { n: e.depth.toFixed(e.depth < 10 ? 1 : 0), cls: depthClass(e.depth) }) : null,
+      e.evtype !== 'earthquake' ? I18N.evtype(e.evtype) : null,
+    ].filter(Boolean).join(' · ');
+    const shaking = shakeHtml(e);
 
     $('#detail').innerHTML = `
       <div class="d-head">
         <button class="icon-btn" data-act="back" aria-label="${esc(T('backToList'))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg></button>
-        <span>${esc(agencyLabel(a))}</span>
+        <span class="d-agency" title="${esc(agencyLabel(a))}">${esc(a.short)}</span>
+        <button class="icon-btn" data-act="zoom" aria-label="${esc(T('d.zoom'))}" title="${esc(T('d.zoom'))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+        ${url ? `<a class="d-report" data-act="report" href="${esc(url)}" target="_blank" rel="noopener">${T('d.report')}</a>` : ''}
       </div>
       <div class="d-hero">
         <div class="d-mag" style="${swatch(e)}"><i></i><span>${fmtMag(e.mag)}</span><small>${esc(e.magType)}</small></div>
         <h2>${esc(placeOf(e))}</h2>
         ${near ? `<p class="d-near">${esc(near)}</p>` : ''}
-        <p>${ago(e.t)}${e.evtype !== 'earthquake' ? ` · ${esc(I18N.evtype(e.evtype))}` : ''}</p>
+        <p>${esc(sub)}</p>
       </div>
       ${alerts.map(t => `<div class="alert">${ICON_WARN}${esc(t)}</div>`).join('')}
       <div class="d-actions d-share"${waiting ? ' aria-busy="true"' : ''}>
@@ -579,24 +613,24 @@
         <a class="btn wa" data-act="whatsapp" href="https://wa.me/?text=${encodeURIComponent(`${shareText(e)} ${shareUrl(e, 'wa')}`)}" target="_blank" rel="noopener"${waiting ? ' aria-disabled="true" tabindex="-1"' : ''}>${ICON_WA}WhatsApp</a>
       </div>
       ${waiting ? `<p class="d-share-wait" role="status"><span class="spinner"></span>${esc(T('share.preparing'))}<button data-act="share-now">${esc(T('share.dontWait'))}</button></p>` : ''}
+      ${shaking || `<p class="d-effects"><b>${T('d.effects')}</b> ${effects(e.mag)}${e.depth >= 150 ? ' ' + T('d.deepNote') : ''}</p>`}
       <dl class="d-grid">
-        <div><dt>${T('d.yourTime')}</dt><dd>${F.local.format(e.t)}</dd></div>
-        <div><dt>${T(inCR ? 'd.utc' : 'd.crTime')}</dt><dd>${(inCR ? F.utc : F.cr).format(e.t)}</dd></div>
-        <div><dt>${T('d.depth')}</dt><dd>${e.depth != null ? `${e.depth.toFixed(e.depth < 10 ? 1 : 0)} km <span class="muted">${depthClass(e.depth)}</span>` : '—'}</dd></div>
-        <div><dt>${T('d.epicenter')}</dt><dd>${e.lat.toFixed(3)}°, ${e.lon.toFixed(3)}°</dd></div>
-        <div><dt>${T('d.energy')}</dt><dd>${energyText(e.mag)}</dd></div>
+        <div${S.userLoc ? '' : ' class="wide"'}><dt>${T('d.yourTime')}</dt><dd>${F.localShort.format(e.t)}</dd></div>
         ${S.userLoc ? `<div><dt>${T('d.fromYou')}</dt><dd>${F.num(Math.round(distKm(S.userLoc, e)))} km</dd></div>` : ''}
-        ${e.felt ? `<div><dt>${T('d.felt')}</dt><dd>${F.num(e.felt)}</dd></div>` : ''}
-        <div class="wide"><dt>${T(`d.within.${S.period}`)}</dt><dd>${nearbyEvents.n
-          ? esc(T('d.nearby', { n: nearbyEvents.n, mag: fmtMag(nearbyEvents.top.mag), ago: ago(nearbyEvents.top.t) }))
+        <div class="wide"><dt>${T(`d.within.${S.period}`, { year: thisYear() })}</dt><dd>${nearbyEvents.n
+          ? esc(T('d.nearby', { n: nearbyEvents.n, mag: fmtMag(nearbyEvents.top.mag), ago: when(nearbyEvents.top.t) }))
           : T('d.noNearby')}</dd></div>
       </dl>
-      <p class="d-effects"><b>${T('d.effects')}</b> ${effects(e.mag)}${e.depth >= 150 ? ' ' + T('d.deepNote') : ''}</p>
-      ${shakeHtml(e)}
-      <div class="d-actions">
-        <button class="btn" data-act="zoom">${T('d.zoom')}</button>
-        ${url ? `<a class="btn" data-act="report" href="${esc(url)}" target="_blank" rel="noopener">${T('d.report')}</a>` : ''}
-      </div>
+      <details class="d-more"${S.moreOpen ? ' open' : ''}>
+        <summary>${T('d.more')}</summary>
+        <dl class="d-grid">
+          ${tzCR ? '' : `<div><dt>${T('d.crTime')}</dt><dd>${F.cr.format(e.t)}</dd></div>`}
+          <div><dt>${T('d.utc')}</dt><dd>${F.utc.format(e.t)}</dd></div>
+          <div><dt>${T('d.epicenter')}</dt><dd>${e.lat.toFixed(3)}°, ${e.lon.toFixed(3)}°</dd></div>
+          <div><dt>${T('d.energy')}</dt><dd>${energyText(e.mag)}</dd></div>
+          <div class="wide"><dt>${T('d.agency')}</dt><dd>${esc(agencyLabel(a))}</dd></div>
+        </dl>
+      </details>
       ${wantsContext(e) ? `<section class="ctx" id="ctx" aria-labelledby="ctxTitle" aria-busy="false">${contextHtml(e)}</section>` : ''}`;
     document.title = `M${fmtMag(e.mag)} · ${placeOf(e)} · Sismo`;
   }
@@ -612,13 +646,20 @@
   function contextHtml(e) {
     const st = Context.load(e, {
       inCR: Sources.inShareArea(e), lang: S.lang,
-      onUpdate: () => { if (detailOpen() && S.selectedId === e.id) { const el = $('#ctx'); if (el) { el.innerHTML = contextHtml(e); } updateShaking(e); } },
+      onUpdate: () => {
+        if (!detailOpen() || S.selectedId !== e.id) return;
+        const el = $('#ctx');
+        if (el) el.innerHTML = contextHtml(e);
+        updateShaking(e);
+        const sh = $('#shake'); // the felt-report count lives in the shaking block
+        if (sh) sh.outerHTML = shakeHtml(e);
+      },
     });
     const { rsn, usgs, emsc, wiki } = st.parts;
-    const official = [];
+    const items = [];
 
     if (rsn) {
-      official.push(`<div class="ctx-item">
+      items.push(`<div class="ctx-item">
         ${rsn.map ? `<a class="ctx-thumb map" href="${esc(rsn.url)}" target="_blank" rel="noopener" data-act="ctx" data-kind="rsn"><img src="${esc(rsn.map)}" alt="${esc(T('ctx.rsn.map'))}" loading="lazy" referrerpolicy="no-referrer"></a>` : ''}
         <div class="ctx-body">
           <b>${esc(T('ctx.rsn'))}${rsn.mag ? ` <span class="muted">M${esc(rsn.mag)}</span>` : ''}</b>
@@ -628,45 +669,39 @@
         </div>
       </div>`);
     }
+    // USGS: only what the rest of the view doesn't already say. Shaking and felt reports are in the
+    // shaking block, a PAGER alert is already a banner when the catalogue carries it, and a green
+    // PAGER level isn't news.
     if (usgs) {
-      const lines = [];
-      if (usgs.felt) lines.push(esc(T('ctx.dyfi', { n: F.num(usgs.felt) })) + (usgs.cdi ? ` · <span class="muted">${esc(T('ctx.cdi', { i: intensity(usgs.cdi) }))}</span>` : ''));
-      if (usgs.mmi != null) lines.push(esc(T('ctx.mmi', { i: intensity(usgs.mmi) })));
-      if (usgs.pager) lines.push(`<span class="pager" data-level="${esc(usgs.pager)}"><i></i>${esc(T('ctx.pager', { level: usgs.pager }))}</span>`);
-      official.push(`<div class="ctx-item">
-        ${usgs.shakeImg ? `<a class="ctx-thumb map" href="${esc(usgs.url)}" target="_blank" rel="noopener" data-act="ctx" data-kind="usgs"><img src="${esc(usgs.shakeImg)}" alt="ShakeMap" loading="lazy" referrerpolicy="no-referrer"></a>` : ''}
-        <div class="ctx-body">
-          <b>USGS</b>
-          ${lines.map(l => `<p>${l}</p>`).join('')}
-          ${usgs.links.map(l => `<p>${ctxLink('usgs-link', l.url, esc(l.text) + ' ↗')}</p>`).join('')}
-          ${ctxLink('usgs', usgs.url, esc(T('ctx.open')), 'ctx-more')}
-        </div>
-      </div>`);
+      const lines = usgs.links.map(l => ctxLink('usgs-link', l.url, esc(l.text) + ' ↗'));
+      if (usgs.pager && usgs.pager !== 'green' && !e.alert) lines.unshift(`<span class="pager" data-level="${esc(usgs.pager)}"><i></i>${esc(T('ctx.pager', { level: usgs.pager }))}</span>`);
+      if (lines.length) {
+        items.push(`<div class="ctx-item"><div class="ctx-body"><b>USGS</b>${lines.map(l => `<p>${l}</p>`).join('')}</div></div>`);
+      }
     }
-    if (emsc) {
-      official.push(`<div class="ctx-item">
-        <div class="ctx-body">
-          <b>${esc(T('ctx.emsc', { n: F.num(emsc.n) }))}</b>
-          <p class="ctx-links">${ctxLink('emsc-photos', emsc.photos, esc(T('ctx.photos')))}${ctxLink('emsc', emsc.testimonies, esc(T('ctx.testimonies')))}</p>
-        </div>
-      </div>`);
-    }
-
-    const parts = [];
-    if (official.length) parts.push(`<h4>${esc(T('ctx.official'))}</h4>${official.join('')}`);
     if (wiki) {
-      parts.push(`<h4>Wikipedia</h4>
-        <a class="ctx-item ctx-card" href="${esc(safeUrl(wiki.url) || '#')}" target="_blank" rel="noopener" data-act="ctx" data-kind="wiki" lang="${esc(wiki.lang)}">
+      items.push(`<a class="ctx-item ctx-card" href="${esc(safeUrl(wiki.url) || '#')}" target="_blank" rel="noopener" data-act="ctx" data-kind="wiki" lang="${esc(wiki.lang)}">
           ${wiki.thumb ? `<span class="ctx-thumb"><img src="${esc(wiki.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>` : ''}
           <span class="ctx-body"><b>${esc(wiki.title)} ↗</b><span class="clamp">${esc(wiki.extract)}</span></span>
         </a>`);
     }
+    // Everything else is a link: one line, not a card each.
+    const links = [
+      emsc && ctxLink('emsc', emsc.testimonies, esc(T('ctx.emsc', { n: F.num(emsc.n) })) + ' ↗'),
+      emsc && ctxLink('emsc-photos', emsc.photos, esc(T('ctx.photos'))),
+      usgs && e.source !== 'USGS' && ctxLink('usgs', usgs.url, 'USGS ↗'),
+    ].filter(Boolean);
+    if (links.length) items.push(`<p class="ctx-links">${links.join('')}</p>`);
+
     const busy = st.pending > 0;
+    const fresh = Date.now() - e.t < 2 * HOUR;
     requestAnimationFrame(() => $('#ctx')?.setAttribute('aria-busy', String(busy)));
+    // Nothing found and not expecting anything: leave the section out entirely.
+    if (!busy && !items.length && !fresh) return '';
     return `<h3 id="ctxTitle">${esc(T('ctx.title'))}</h3>
-      ${parts.join('')}
+      ${items.join('')}
       ${busy ? `<p class="ctx-status"><span class="spinner"></span>${esc(T('ctx.loading'))}</p>`
-        : parts.length ? '' : `<p class="ctx-status">${esc(T('ctx.none'))}${Date.now() - e.t < 2 * HOUR ? ' ' + esc(T('ctx.fresh')) : ''}</p>`}`;
+        : items.length ? '' : `<p class="ctx-status">${esc(T('ctx.none'))} ${esc(T('ctx.fresh'))}</p>`}`;
   }
 
   // ---------------------------------------------------------------- shaking (js/shaking.js)
@@ -723,14 +758,17 @@
       const L = k + 2;
       return `<span style="--c:${Shaking.PALETTE[L]}"${L > top ? ' class="off"' : ''} title="${esc(mmi[L])}">${r}</span>`;
     }).join('');
+    // Where the figure comes from, in one line: the model or ShakeMap, and how many people reported.
+    const felt = Context.peek(e, S.lang)?.usgs?.felt || e.felt;
+    const source = [T(`shake.${f.kind}.note`), felt ? T('shake.felt', { n: felt, count: F.num(felt) }) + (shake.reports ? `, ${T('shake.reports')}` : '') : null];
     return `<section class="shake" id="shake" data-kind="${f.kind}">
       <div class="shake-head">
         <b>${esc(T(`shake.${f.kind}`))}</b>
         <label class="check"><input type="checkbox" data-act="shake-toggle"${S.layers.shaking ? ' checked' : ''}>${esc(T('shake.onMap'))}</label>
       </div>
       <div class="shake-scale" aria-hidden="true">${scale}</div>
-      <p>${esc(T('shake.peak', { i: intensity(f.peak) }))}${Number.isFinite(here) && here >= 1 ? ` · ${esc(T('shake.here', { i: intensity(here) }))}` : ''}</p>
-      <p class="muted">${esc(T(`shake.${f.kind}.note`))}${shake.reports ? ' ' + esc(T('shake.reports')) : ''}</p>
+      <p>${esc(T('shake.peak', { i: intensity(f.peak) }))}${Number.isFinite(here) && here >= 1 ? ` · <b>${esc(T('shake.here', { i: intensity(here) }))}</b>` : ''}</p>
+      <p class="muted">${esc(source.filter(Boolean).join(' · '))}</p>
     </section>`;
   }
 
@@ -824,7 +862,8 @@
 
   function renderTemblo() {
     const el = $('#temblo');
-    if (!S.events.size) { el.hidden = true; return; }
+    // The archive holds only notable quakes, so it can't answer "did it just shake?".
+    if (!S.events.size || isYear()) { el.hidden = true; return; }
     const now = Date.now();
     const inScope = S.userLoc
       ? e => distKm(S.userLoc, e) <= 200
@@ -944,7 +983,7 @@
     if (via && id !== S.selectedId) track('open-event', { via, ...evInfo(e), ...extra });
     S.selectedId = id;
     Context.forgetIfFresh(e);
-    map.setFilter('selected', ['==', ['get', 'id'], id]);
+    if (map.getLayer('selected')) map.setFilter('selected', ['==', ['get', 'id'], id]); // else setupLayers applies it
     renderDetail(e);
     showView('detail');
     if (fly) flyToEvent(e);
@@ -1004,6 +1043,14 @@
   function ticks() {
     const out = [], span = tl.end - tl.start;
     const d = new Date(tl.start);
+    if (span > 32 * DAY) { // the year: one tick per month
+      d.setHours(0, 0, 0, 0);
+      d.setDate(1);
+      for (; d.getTime() < tl.end; d.setMonth(d.getMonth() + 1)) {
+        if (d.getTime() >= tl.start) out.push({ t: d.getTime(), label: F.month.format(d) });
+      }
+      return out;
+    }
     if (span <= DAY) {
       d.setMinutes(0, 0, 0);
       d.setHours(Math.ceil((d.getHours() + 1) / 3) * 3);
@@ -1205,7 +1252,7 @@
     renderList();
     drawTimeline();
     if (detailOpen()) renderDetail(S.events.get(S.selectedId));
-    if (!$('#loading').hidden) $('#loadingText').textContent = T('loadingData', { period: T(`periodLong.${S.period}`), source: S.source });
+    if (!$('#loading').hidden) $('#loadingText').textContent = loadingText();
   }
 
   // ---------------------------------------------------------------- UI wiring
@@ -1217,6 +1264,9 @@
     setPressed($('#langSeg'), 'data-v', S.lang);
     setPressed($('#sourceSeg'), 'data-v', S.source);
     setPressed($('#periodSeg'), 'data-v', S.period);
+    const yearBtn = $('#periodSeg [data-v="year"]');
+    yearBtn.textContent = thisYear();
+    yearBtn.title = T('period.year', { year: thisYear() });
     setPressed($('#sortSeg'), 'data-v', S.sort);
     $$('#rail [data-layer]').forEach(b => b.setAttribute('aria-pressed', String(!!S.layers[b.dataset.layer])));
     setPressed($('#rail'), 'data-color', S.colorBy);
@@ -1246,7 +1296,9 @@
     const v = e.target.closest('button')?.dataset.v;
     if (!v || v === S.period) return;
     track('period', { to: v });
-    S.period = v; saveSettings(); syncControls();
+    S.period = v;
+    if (v !== 'year') S.basePeriod = v;
+    saveSettings(); syncControls();
     goLive(); loadData();
   });
 
@@ -1365,6 +1417,9 @@
     }
     else if (act === 'ctx' && S.selectedId) track('context', { kind: el.dataset.kind, ...evInfo(S.events.get(S.selectedId)) });
   });
+
+  // "More data" stays open for the next quake once opened (toggle doesn't bubble, so capture it).
+  $('#detail').addEventListener('toggle', e => { if (e.target.matches('.d-more')) S.moreOpen = e.target.open; }, true);
 
   $('#temblo').addEventListener('click', e => {
     e.stopPropagation(); // don't toggle the mobile sheet

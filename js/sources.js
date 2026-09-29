@@ -113,6 +113,23 @@ window.Sources = (() => {
     return valid(e) ? e : null;
   }
 
+  /** Notable quakes (see isNotable) from `startMs` to now, strongest first: the year archive and permanent share pages. */
+  async function fetchNotable(source, startMs, signal) {
+    const start = new Date(startMs).toISOString().slice(0, 19);
+    const a = SHARE_AREA;
+    const queries = source === 'USGS'
+      ? [`minmagnitude=${NOTABLE.world}`, `minmagnitude=${NOTABLE.area}&minlatitude=${a.s}&maxlatitude=${a.n}&minlongitude=${a.w}&maxlongitude=${a.e}`]
+        .map(q => `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${start}&limit=2000&${q}`)
+      : [`minmag=${NOTABLE.world}`, `minmag=${NOTABLE.area}&minlat=${a.s}&maxlat=${a.n}&minlon=${a.w}&maxlon=${a.e}`]
+        .map(q => `${EMSC_API}?format=json&starttime=${start}&limit=2000&${q}`);
+    const parse = source === 'USGS' ? fromUsgs : fromEmsc;
+    const byId = new Map();
+    for (const j of await Promise.all(queries.map(u => getJSON(u, signal)))) {
+      for (const e of j.features.map(parse)) if (valid(e) && isNotable(e)) byId.set(e.id, e);
+    }
+    return [...byId.values()].sort((x, y) => (y.mag ?? 0) - (x.mag ?? 0) || y.t - x.t);
+  }
+
   /* Live updates. EMSC pushes new/updated events over a WebSocket;
      USGS has no push channel, so poll its last-hour feed every minute. */
   function live(source, { onEvent, onStatus }) {
@@ -172,5 +189,10 @@ window.Sources = (() => {
   const shareSlug = e => e.id.replace(':', '-');
   const hasSharePage = e => ((e.mag ?? 0) >= 5 || (inShareArea(e) && (e.mag ?? 0) >= 2.5)) && /^[\w-]+$/.test(shareSlug(e));
 
-  return { fetchRecent, fetchEvent, live, agency, fromEmsc, fromUsgs, SHARE_AREA, inShareArea, shareSlug, hasSharePage };
+  /* Notable quakes: big ones anywhere, and the strongest around Costa Rica. They're listed in the
+     app's year archive and keep their share page for good, not just while they're recent. */
+  const NOTABLE = { world: 6.5, area: 4.5 };
+  const isNotable = e => (e.mag ?? 0) >= NOTABLE.world || (inShareArea(e) && (e.mag ?? 0) >= NOTABLE.area);
+
+  return { fetchRecent, fetchEvent, fetchNotable, live, agency, fromEmsc, fromUsgs, SHARE_AREA, inShareArea, shareSlug, hasSharePage, NOTABLE, isNotable };
 })();
