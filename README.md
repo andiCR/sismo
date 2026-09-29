@@ -7,11 +7,11 @@ It is a static site (HTML, CSS and JS) with no build step. The map needs no back
 
 ## Run it locally
 
-```powershell
-powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 5173
+```bash
+npm run dev
 ```
 
-Then open http://localhost:5173. Any static server works; `serve.ps1` needs nothing installed. (If Windows has reserved port 5173, use another, for example `-Port 8123`.)
+Then open http://localhost:8123. It's a small static server with no dependencies (`scripts/serve.mjs`), and any other static server works too. `npm run dev -- --port 8080` picks another port. After `npm run build`, `npm run dev -- --root _site` serves the built site with its share pages.
 
 ## Deploy
 
@@ -172,7 +172,7 @@ Its launcher needs no Node: on first use it downloads the matching engine binary
 
 ```bash
 ./.claude/skills/impeccable/scripts/impeccable detect index.html css js
-./.claude/skills/impeccable/scripts/impeccable detect http://localhost:5173/
+./.claude/skills/impeccable/scripts/impeccable detect http://localhost:8123/
 ```
 
 The edit-time design check (hooks) is machine-local: it lives in the gitignored `.claude/settings.local.json`. To enable it on another machine, copy the `hooks` block from Impeccable's `universal.zip` release (`.claude/settings.json`) into that file.
@@ -192,7 +192,7 @@ The edit-time design check (hooks) is machine-local: it lives in the gitignored 
 - `js/shaking.js`: the selected quake's shaking gradient (USGS ShakeMap, or an estimate from magnitude, depth and distance)
 - `js/app.js`: map, layers, list, detail, timeline and replay
 - `manifest.webmanifest`, `sw.js`, `icons/`: the installable app (see Features)
-- `serve.ps1`: tiny local static server
+- `scripts/serve.mjs`: tiny local static server (`npm run dev`)
 
 ## Ideas for next steps
 

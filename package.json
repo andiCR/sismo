@@ -4,6 +4,7 @@
   "description": "Live earthquake map for Costa Rica and the world",
   "type": "module",
   "scripts": {
+    "dev": "node scripts/serve.mjs",
     "build": "node scripts/build-site.mjs"
   },
   "dependencies": {

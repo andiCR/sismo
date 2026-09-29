@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "sismo",
-      "runtimeExecutable": "powershell",
-      "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "serve.ps1", "-Port", "5173"],
-      "port": 5173
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/serve.mjs", "--port", "8123"],
+      "port": 8123
     }
   ]
 }
