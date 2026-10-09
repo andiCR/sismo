@@ -12,6 +12,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import vm from 'node:vm';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
 
@@ -32,10 +33,10 @@ const FONTS = ['Archivo-Regular', 'Archivo-Medium', 'Archivo-Bold', 'ArchivoCond
 
 // Reuse the browser code: translations, towns, data sources and the share kit.
 globalThis.window = globalThis;
-for (const f of ['js/i18n.js', 'js/places.js', 'js/sources.js', 'scripts/share-kit.js']) {
+for (const f of ['js/i18n.js', 'js/places.js', 'js/sources.js', 'js/shaking.js', 'scripts/share-kit.js']) {
   vm.runInThisContext(await fs.readFile(path.join(ROOT, f), 'utf8'), { filename: f });
 }
-const { I18N, Sources, ShareKit } = globalThis;
+const { I18N, Sources, Shaking, ShareKit } = globalThis;
 I18N.setLang(LANG);
 
 async function fetchOk(url) {
@@ -107,6 +108,69 @@ const usgs = [...usgsById.values()];
 const geo = { land, plates };
 const siteLabel = SITE_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
+/* Shaking on the cards, as in the app: the USGS ShakeMap when there is one, else the estimate.
+   ShakeMap files are kept in .cache/shake/ (restored between builds by actions/cache) and only
+   fetched again while a quake is recent and its ShakeMap has a newer version. */
+const SHAKE_DIR = path.join(CACHE, 'shake');
+const SHAKE_FRESH = 2 * DAY; // ShakeMaps are revised in the first hours; later ones come from the cache
+const SHAKE_MIN_MAG = 4.5;   // USGS rarely makes one for smaller quakes outside the US
+const usgsAll = [...usgs, ...notableUsgs];
+let shakeFetched = 0, shakeCached = 0;
+const shakeUsed = new Set(); // cache files of quakes that still have a page; the rest are deleted
+await fs.mkdir(SHAKE_DIR, { recursive: true });
+
+async function shakemapFiles(id, recent) {
+  const file = path.join(SHAKE_DIR, `${id}.json`);
+  shakeUsed.add(`${id}.json`);
+  const cached = await fs.readFile(file, 'utf8').then(JSON.parse, () => null);
+  if (cached && !recent) { shakeCached++; return cached; }
+  const j = await (await fetchOk(`https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${encodeURIComponent(id)}`)).json();
+  const sm = j.properties.products?.shakemap?.[0];
+  const cov = sm?.contents?.['download/coverage_mmi_low_res.covjson']?.url;
+  const out = { version: cov ? sm.updateTime : null };
+  if (cached && cached.version === out.version) { shakeCached++; return cached; }
+  if (cov) {
+    const cont = sm.contents['download/cont_mmi.json']?.url;
+    [out.cov, out.cont] = await Promise.all([fetchOk(cov).then(r => r.json()), cont ? fetchOk(cont).then(r => r.json()).catch(() => null) : null]);
+  }
+  shakeFetched++;
+  await fs.writeFile(file, JSON.stringify(out));
+  return out;
+}
+
+async function shakeField(e) {
+  const estimate = () => Shaking.estimate(e);
+  if ((e.mag ?? 0) < SHAKE_MIN_MAG) return estimate();
+  const id = e.source === 'USGS' ? e.id.slice(5) : usgsAll.find(u => Sources.sameQuake(u, e))?.id.slice(5);
+  if (!id) return estimate();
+  const files = await attempt(`ShakeMap ${id}`, () => shakemapFiles(id, fetchedAt - e.t < SHAKE_FRESH), null);
+  return files?.cov ? Shaking.fromShakemap(files.cov, files.cont) : estimate();
+}
+
+// RGBA pixels → PNG data URL (8-bit RGBA, no filtering), for the card's gradient image.
+function pngDataUrl({ width, height, data }) {
+  const chunk = (type, body) => {
+    const len = Buffer.alloc(4); len.writeUInt32BE(body.length);
+    const tb = Buffer.concat([Buffer.from(type, 'ascii'), body]);
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(zlib.crc32(tb));
+    return Buffer.concat([len, tb, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; ihdr[9] = 6; // bit depth, RGBA
+  const raw = Buffer.alloc(height * (width * 4 + 1));
+  for (let y = 0; y < height; y++) Buffer.from(data.buffer, y * width * 4, width * 4).copy(raw, y * (width * 4 + 1) + 1);
+  const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+  return `data:image/png;base64,${png.toString('base64')}`;
+}
+
+async function cardShake(e) {
+  const field = await shakeField(e);
+  if (!field) return null;
+  const px = ShareKit.fieldPixels(field, ShareKit.cardView(e, field));
+  return { field, href: px && pngDataUrl(px) };
+}
+
 const render = svg => new Resvg(svg, {
   font: { fontFiles: fonts, loadSystemFonts: fonts.length === 0, defaultFontFamily: 'Archivo' },
 }).render().asPng();
@@ -126,13 +190,22 @@ const indexSrc = await fs.readFile(path.join(ROOT, 'index.html'), 'utf8');
 const sitemap = [];
 const manifest = { fetchedAt, pages: {} }; // slug → magnitude shown on the card
 let pages = 0;
+// ShakeMap lookups go over the network: a few at a time, before drawing.
+const shakes = new Map();
+const queue = [...wanted];
+await Promise.all(Array.from({ length: 8 }, async () => {
+  for (let e; (e = queue.shift());) shakes.set(e.id, await cardShake(e));
+}));
+if (usgs.length && notableUsgs.length) { // without USGS nothing matched: keep the cache as it is
+  for (const f of await fs.readdir(SHAKE_DIR)) if (!shakeUsed.has(f)) await fs.rm(path.join(SHAKE_DIR, f));
+}
 for (const e of wanted) {
   const slug = Sources.shareSlug(e);
   const url = `${SITE_URL}e/${slug}/`;
   const d = ShareKit.describe(e);
   const dir = path.join(OUT, 'e', slug);
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, 'og.png'), render(ShareKit.eventSVG(e, geo, siteLabel)));
+  await fs.writeFile(path.join(dir, 'og.png'), render(ShareKit.eventSVG(e, geo, siteLabel, shakes.get(e.id))));
   await fs.writeFile(path.join(dir, 'index.html'), ShareKit.pageHtml(indexSrc, {
     lang: LANG, title: d.title, description: d.description, url, image: `${url}og.png`,
     base: '../../', slug, event: e,
@@ -175,4 +248,5 @@ ${sitemap.join('\n')}
 `);
 await fs.writeFile(path.join(OUT, 'robots.txt'), `User-agent: *\nAllow: /\nSitemap: ${SITE_URL}sitemap.xml\n`);
 
+console.log(`ShakeMaps: ${shakeFetched} fetched, ${shakeCached} from the cache`);
 console.log(`Built ${pages} share pages (${archived} older notable ones) from ${emsc.length} EMSC + ${usgs.length} USGS events in ${((Date.now() - t0) / 1000).toFixed(1)} s → ${OUT}`);

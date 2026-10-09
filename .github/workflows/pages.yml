@@ -31,10 +31,24 @@ jobs:
         run: npm install --no-audit --no-fund
       - id: pages
         uses: actions/configure-pages@v6
+      # Fonts and USGS ShakeMaps for the share cards (scripts/build-site.mjs), kept between builds.
+      - name: Restore build cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .cache
+          key: build-cache-${{ github.run_id }}
+          restore-keys: build-cache-
       - name: Build site and share pages
         run: npm run build
         env:
           SITE_URL: ${{ steps.pages.outputs.base_url }}/
+      # Saved only when something in it changed (a new or revised ShakeMap).
+      - name: Save build cache
+        uses: actions/cache/save@v6
+        continue-on-error: true
+        with:
+          path: .cache
+          key: build-cache-${{ hashFiles('.cache/**') }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site

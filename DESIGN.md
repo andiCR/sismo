@@ -310,8 +310,8 @@ The detail answers first and then gets out of the way. In order:
 - No banner, sound, pulse or red wash: the map shows PTWC's forecast in its own words and sizes, like any other data layer.
 
 ### Share cards (1200×630)
-- The same system as an image. A solid Drum Black panel (560px) on the left with a hairline edge holds the wordmark, a dot plus "Magnitud" label, the condensed magnitude figure (138px), the place (42px/700), the "near" line in Trace Orange Text and the time and depth. The footer is the site and "Datos: <agency short name>".
-- The map is on the right, with the epicenter drawn like the app's selected quake: filled dot, white ring and two faint wave rings. No glow and no gradient fade.
+- The same system as an image. A solid Drum Black panel (560px) on the left with a hairline edge holds the wordmark, a dot plus "Magnitud" label, the condensed magnitude figure (138px), the place (42px/700), the "near" line in Trace Orange Text, the time, the strongest shaking ("Sacudida medida: hasta IX (violento)", or "estimada") and the depth. The footer is the site and "Datos: <agency short name>".
+- The map is on the right, with the epicenter drawn like the app's selected quake: filled dot and white ring. Under it, the same shaking layer as the app: the USGS ShakeMap when there is one, otherwise the estimate, as the MMI gradient under the plate boundaries, with contour lines (dashed when estimated) and one Roman numeral per level. The map zooms to fit that shaking. Without a shaking field, two faint wave rings stand in. No glow.
 
 ## Do's and Don'ts
 

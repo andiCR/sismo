@@ -190,6 +190,7 @@ window.I18N = (() => {
       'og.siteLine': 'Costa Rica and the world · data from OVSICORI, RSN-UCR, EMSC and USGS',
       'og.data': ({ agency }) => `Data: ${agency}`,
       'og.mag': 'Magnitude',
+      'og.shake': ({ i, measured }) => `${measured ? 'Measured' : 'Estimated'} shaking: up to ${i}`,
     },
 
     es: {
@@ -376,6 +377,7 @@ window.I18N = (() => {
       'og.siteLine': 'Costa Rica y el mundo · datos del OVSICORI, la RSN-UCR, el EMSC y el USGS',
       'og.data': ({ agency }) => `Datos: ${agency}`,
       'og.mag': 'Magnitud',
+      'og.shake': ({ i, measured }) => `Sacudida ${measured ? 'medida' : 'estimada'}: hasta ${i}`,
     },
   };
 
