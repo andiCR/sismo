@@ -89,15 +89,40 @@ window.Sources = (() => {
     return r.json();
   }
 
-  async function fetchRecent(source, spanMs, signal) {
+  /* EMSC can take half an hour to list a big quake (M7.6 off Panama, 2026-10-09: USGS had it after
+     6 minutes, EMSC after 30). In the EMSC view, M5+ quakes from USGS stand in until EMSC has them. */
+  const BACKFILL_MAG = 5;
+  const RAD = Math.PI / 180;
+  const kmBetween = (a, b) => 12742 * Math.asin(Math.sqrt(Math.sin((b.lat - a.lat) * RAD / 2) ** 2
+    + Math.cos(a.lat * RAD) * Math.cos(b.lat * RAD) * Math.sin((b.lon - a.lon) * RAD / 2) ** 2));
+  // Early solutions of a big quake differ by tens of km and a few seconds between agencies.
+  const sameQuake = (a, b) => Math.abs(a.t - b.t) < 120e3 && kmBetween(a, b) < 150;
+  const backfill = feature => {
+    const e = fromUsgs(feature);
+    return valid(e) && (e.mag ?? 0) >= BACKFILL_MAG ? e : null;
+  };
+
+  /** Quakes from the last `spanMs`. `backfill` adds USGS stand-ins to EMSC (the app's view; the
+      share-page build reads USGS itself). */
+  async function fetchRecent(source, spanMs, signal, { backfill: withBackfill = false } = {}) {
     if (source === 'USGS') {
       const feed = spanMs <= DAY ? 'all_day' : spanMs <= 7 * DAY ? 'all_week' : 'all_month';
       const j = await getJSON(`${USGS_FEED}${feed}.geojson`, signal);
       return j.features.map(fromUsgs).filter(valid);
     }
     const start = new Date(Date.now() - spanMs).toISOString().slice(0, 19);
-    const j = await getJSON(`${EMSC_API}?format=json&starttime=${start}&limit=40000`, signal);
-    return j.features.map(fromEmsc).filter(valid);
+    const feed = spanMs <= DAY ? '4.5_day' : spanMs <= 7 * DAY ? '4.5_week' : '4.5_month';
+    const [j, usgs] = await Promise.all([
+      getJSON(`${EMSC_API}?format=json&starttime=${start}&limit=40000`, signal),
+      !withBackfill ? { features: [] } : getJSON(`${USGS_FEED}${feed}.geojson`, signal).catch(err => { // EMSC alone is still a full view
+        if (err.name === 'AbortError') throw err;
+        console.warn('usgs backfill:', err.message);
+        return { features: [] };
+      }),
+    ]);
+    const evs = j.features.map(fromEmsc).filter(valid);
+    const extra = usgs.features.map(backfill).filter(u => u && u.t >= Date.now() - spanMs && !evs.some(e => sameQuake(e, u)));
+    return evs.concat(extra);
   }
 
   /** One event by app id ("emsc:<unid>" or "usgs:<id>"), e.g. for a shared link to an older quake. */
@@ -147,9 +172,10 @@ window.Sources = (() => {
   }
 
   /* Live updates. EMSC pushes new/updated events over a WebSocket;
-     USGS has no push channel, so poll its last-hour feed every minute. */
+     USGS has no push channel, so poll its last-hour feed every minute. The EMSC view also polls
+     USGS for M5+ stand-ins (see BACKFILL_MAG); the app drops those EMSC already has. */
   function live(source, { onEvent, onStatus }) {
-    let stopped = false, ws = null, timer = null, retry = 2000;
+    let stopped = false, ws = null, timer = null, retry = 2000, backfillTimer = null;
 
     if (source === 'USGS') {
       const poll = async () => {
@@ -182,9 +208,17 @@ window.Sources = (() => {
         ws.onerror = () => ws.close();
       };
       connect();
+      const pollBackfill = async () => {
+        try {
+          const j = await getJSON(`${USGS_FEED}4.5_hour.geojson`);
+          j.features.map(backfill).filter(Boolean).forEach(e => onEvent(e, 'poll'));
+        } catch { /* the WebSocket's status is the one shown */ }
+        if (!stopped) backfillTimer = setTimeout(pollBackfill, 60000);
+      };
+      pollBackfill();
     }
 
-    return () => { stopped = true; clearTimeout(timer); if (ws) ws.close(); };
+    return () => { stopped = true; clearTimeout(timer); clearTimeout(backfillTimer); if (ws) ws.close(); };
   }
 
   function agency(e) {
@@ -210,5 +244,5 @@ window.Sources = (() => {
   const NOTABLE = { world: 6.5, area: 4.5 };
   const isNotable = e => (e.mag ?? 0) >= NOTABLE.world || (inShareArea(e) && (e.mag ?? 0) >= NOTABLE.area);
 
-  return { fetchRecent, fetchEvent, fetchNotable, lastAsStrong, live, agency, fromEmsc, fromUsgs, SHARE_AREA, inShareArea, shareSlug, hasSharePage, NOTABLE, isNotable };
+  return { fetchRecent, fetchEvent, sameQuake, fetchNotable, lastAsStrong, live, agency, fromEmsc, fromUsgs, SHARE_AREA, inShareArea, shareSlug, hasSharePage, NOTABLE, isNotable };
 })();

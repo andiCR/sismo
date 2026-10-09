@@ -488,7 +488,7 @@
     try {
       const evs = isYear()
         ? await Sources.fetchNotable(S.source, yearStart(), ctl.signal)
-        : await Sources.fetchRecent(S.source, PERIODS[S.period], ctl.signal);
+        : await Sources.fetchRecent(S.source, PERIODS[S.period], ctl.signal, { backfill: true });
       if (ctl.signal.aborted) return;
       S.events = new Map(evs.map(e => [e.id, e]));
       if (S.pinned) {
@@ -528,10 +528,30 @@
   let refreshTimer = null;
   const scheduleRefresh = () => { clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshAll, 400); };
 
+  // In the EMSC view, M5+ quakes from USGS stand in until EMSC lists them (Sources.live).
+  const otherSourceCopy = e => {
+    for (const o of S.events.values()) if (o.source !== e.source && Sources.sameQuake(o, e)) return o;
+    return null;
+  };
+
   function onLiveEvent(e, action) {
     if (Date.now() - e.t > PERIODS[S.period]) return;
     if (isYear() && !Sources.isNotable(e)) return;
-    const isNew = !S.events.has(e.id);
+    let isNew = !S.events.has(e.id);
+    if (isNew && e.source !== S.source) {
+      if (otherSourceCopy(e)) return; // EMSC has it already
+    } else if (isNew && S.source === 'EMSC' && magOf(e) >= 4) {
+      const standIn = otherSourceCopy(e);
+      if (standIn) { // EMSC caught up: take its version, keep it open if it was, and don't toast again
+        S.events.delete(standIn.id);
+        if (S.pinned?.id === standIn.id) S.pinned = e;
+        if (S.selectedId === standIn.id) {
+          S.selectedId = e.id;
+          if (map.getLayer('selected')) map.setFilter('selected', ['==', ['get', 'id'], e.id]);
+        }
+        isNew = false;
+      }
+    }
     S.events.set(e.id, e);
     scheduleRefresh();
     if (!isNew || action === 'update') return;
