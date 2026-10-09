@@ -23,6 +23,10 @@ const inNear = e => e.lat >= NEAR.s && e.lat <= NEAR.n && e.lon >= NEAR.w && e.l
 // If a build fetched its data this long after a quake's last update and still made no page for it
 // (or shows another magnitude), the build's data doesn't agree with ours: stop asking.
 const GIVE_UP = 20 * 6e4;
+// A build takes about a minute. One still unfinished after this is stuck: a deploy once sat
+// "waiting" from 2026-10-06 to 10-09, and the workflow's concurrency group queued (and cancelled)
+// every later build behind it, so nothing deployed. Stuck runs are cancelled.
+const STUCK = 60 * 6e4;
 
 export default {
   async scheduled(controller, env, ctx) {
@@ -42,7 +46,11 @@ async function triggerBuild(env, quakes) {
   quakes = quakes.filter(Sources.hasSharePage);
   const manifest = await fetchManifest(env);
   let due = quakes.filter(e => isDue(e, manifest));
-  if (!due.length) return;
+  if (!due.length) {
+    // Pushes and the schedule start builds too: look for a stuck one every 15 minutes anyway.
+    if (new Date().getUTCMinutes() % 15 === 0) await buildRunning(env);
+    return;
+  }
   if (await buildRunning(env)) {
     console.log(`waiting for the running build (due: ${describe(due)})`);
     return;
@@ -103,9 +111,25 @@ async function fetchManifest(env) {
   return r.json();
 }
 
+/** Whether a build is under way. Cancels stuck ones (see STUCK) instead of waiting for them. */
 async function buildRunning(env) {
   const j = await github(env, `actions/workflows/${env.GITHUB_WORKFLOW}/runs?per_page=5`);
-  return j.workflow_runs.some(r => r.status !== 'completed');
+  let running = false;
+  for (const r of j.workflow_runs.filter(r => r.status !== 'completed')) {
+    const age = Date.now() - Date.parse(r.run_started_at || r.created_at);
+    if (age < STUCK) { running = true; continue; }
+    const how = age < 2 * STUCK ? 'cancel' : 'force-cancel'; // a plain cancel didn't do it last time
+    const what = `build ${r.id}, ${r.status} for ${Math.round(age / 6e4)} min (${r.html_url})`;
+    if (!env.GITHUB_TOKEN) { console.warn(`dry run, would ${how} the stuck ${what}`); running = true; continue; }
+    try {
+      await github(env, `actions/runs/${r.id}/${how}`, { method: 'POST' });
+      console.warn(`${how}led the stuck ${what}`);
+    } catch (err) {
+      console.error(`couldn't ${how} the stuck ${what}: ${err.message}`);
+      running = true; // it still holds the concurrency group
+    }
+  }
+  return running;
 }
 
 async function github(env, path, init = {}) {
@@ -119,5 +143,6 @@ async function github(env, path, init = {}) {
     },
   });
   if (!r.ok) throw new Error(`GitHub ${r.status} on ${path}: ${(await r.text()).slice(0, 200)}`);
-  return r.status === 204 ? null : r.json();
+  const text = await r.text(); // empty for 204, and maybe for 202 (cancel)
+  return text ? JSON.parse(text) : null;
 }
