@@ -1,4 +1,5 @@
-/* Nearest-town descriptions ("25 km SW of Quepos") for events in and around Costa Rica.
+/* Nearest-town descriptions ("25 km SW of Quepos") for events in and around Costa Rica, Panama
+   and western Nicaragua.
    EMSC region names are often just "Costa Rica", so this gives people a place they recognise.
    Shared by the app and the share-page build script. */
 window.Places = (() => {
@@ -21,7 +22,17 @@ window.Places = (() => {
     ['San Ramón', 10.0877, -84.4700, 'CR'], ['Parrita', 9.5210, -84.3230, 'CR'], ['Montezuma', 9.6547, -85.0692, 'CR'],
     ['Paquera', 9.8200, -84.9360, 'CR'],
     ['Rivas', 11.4372, -85.8264, 'NI', 1], ['San Juan del Sur', 11.2529, -85.8705, 'NI'], ['San Carlos', 11.1236, -84.7797, 'NI'],
+    ['Managua', 12.1364, -86.2514, 'NI', 1], ['Granada', 11.9344, -85.9560, 'NI', 1], ['León', 12.4379, -86.8780, 'NI', 1],
+    ['Masaya', 11.9744, -86.0942, 'NI'], ['Jinotepe', 11.8460, -86.1990, 'NI'], ['Chinandega', 12.6290, -87.1310, 'NI'],
+    ['Corinto', 12.4820, -87.1730, 'NI'], ['Juigalpa', 12.1060, -85.3640, 'NI'], ['Moyogalpa', 11.5400, -85.6970, 'NI'],
+    ['Bluefields', 12.0137, -83.7635, 'NI', 1], ['San Juan de Nicaragua', 10.9214, -83.7036, 'NI'],
     ['David', 8.4273, -82.4308, 'PA', 1], ['Bocas del Toro', 9.3403, -82.2420, 'PA'], ['Puerto Armuelles', 8.2833, -82.8667, 'PA'],
+    ['Boquete', 8.7800, -82.4410, 'PA'], ['Changuinola', 9.4330, -82.5170, 'PA'], ['Almirante', 9.3000, -82.4020, 'PA'],
+    ['Santiago', 8.1004, -80.9833, 'PA', 1], ['Soná', 8.0137, -81.3187, 'PA'], ['Santa Catalina', 7.6310, -81.2560, 'PA'],
+    ['Chitré', 7.9614, -80.4289, 'PA', 1], ['Las Tablas', 7.7646, -80.2742, 'PA'], ['Pedasí', 7.5310, -80.0260, 'PA'],
+    ['Tonosí', 7.4040, -80.4400, 'PA'], ['Aguadulce', 8.2410, -80.5440, 'PA'], ['Penonomé', 8.5180, -80.3570, 'PA'],
+    ['La Chorrera', 8.8803, -79.7833, 'PA'], ['Ciudad de Panamá', 8.9824, -79.5199, 'PA', 1], ['Colón', 9.3592, -79.9014, 'PA', 1],
+    ['La Palma', 8.4050, -78.1460, 'PA'], ['Metetí', 8.4980, -77.9750, 'PA'], ['Jaqué', 7.5170, -78.1660, 'PA'],
   ].map(([name, lat, lon, country, major]) => ({ name, lat, lon, country, major: !!major }));
 
   const COUNTRY = { CR: 'Costa Rica', NI: 'Nicaragua', PA: 'Panama' };
@@ -44,7 +55,7 @@ window.Places = (() => {
 
   /** Nearest known town within maxKm, or null: { name, country, km, dir }. */
   function nearest(lat, lon, maxKm = 120) {
-    if (lat < 6 || lat > 13 || lon < -88 || lon > -81) return null; // quick reject outside the region
+    if (lat < 5 || lat > 13.5 || lon < -88.5 || lon > -77) return null; // quick reject outside the region
     let best = null, bestKm = Infinity;
     for (const t of TOWNS) {
       const km = distKm(t.lat, t.lon, lat, lon);
@@ -73,5 +84,5 @@ window.Places = (() => {
   const REGIONS = Object.fromEntries(Object.entries(REGION_TOWNS)
     .map(([k, names]) => [k, names.map(n => TOWNS.find(t => t.name === n)).filter(Boolean)]));
 
-  return { TOWNS, REGIONS, nearest, label, distKm };
+  return { TOWNS, REGIONS, COUNTRY, nearest, label, distKm };
 })();

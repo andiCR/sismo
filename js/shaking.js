@@ -98,6 +98,11 @@ window.Shaking = (() => {
   /** Measured field from a ShakeMap's MMI grid (CoverageJSON) and contours, or null. */
   async function shakemap({ shakeCov, shakeCont }) {
     const [cov, cont] = await Promise.all([getJSON(shakeCov), shakeCont ? getJSON(shakeCont).catch(() => null) : null]);
+    return fromShakemap(cov, cont);
+  }
+
+  /** The same from already fetched files (the share-card build caches them). */
+  function fromShakemap(cov, cont) {
     const { x, y } = cov.domain.axes;
     const vals = cov.ranges.MMI.values;
     const order = cov.ranges.MMI.axisNames?.join() || 'y,x';
@@ -176,5 +181,8 @@ window.Shaking = (() => {
     return { url: c.toDataURL('image/png'), coordinates: [[w, n], [e, n], [e, s], [w, s]] };
   }
 
-  return { estimate, feltKm, shakemap, reports, image, PALETTE, ROMAN, level };
+  /** Colour and opacity of the gradient at `mmi`: [r, g, b, alpha 0–1]. */
+  const pixel = mmi => [...rgbAt(mmi), alphaAt(mmi)];
+
+  return { estimate, feltKm, reachKm, shakemap, fromShakemap, reports, image, pixel, PALETTE, ROMAN, level };
 })();
