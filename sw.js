@@ -2,10 +2,10 @@
    it's there, so a deploy shows up straight away, and from this cache when offline. Quake data, map
    tiles and fonts aren't cached: they're live, or they come from other sites. */
 importScripts('js/config.js');
-const CACHE = 'sismo-shell-v2';
+const CACHE = 'sismo-shell-v3';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'icons/icon.svg', 'css/style.css', 'js/config.js',
-  'js/i18n.js', 'js/places.js', 'js/sources.js', 'js/context.js', 'js/shaking.js', 'js/app.js',
+  'js/i18n.js', 'js/places.js', 'js/sources.js', 'js/context.js', 'js/shaking.js', 'js/tsunami.js', 'js/app.js',
 ];
 const scope = new URL(self.registration.scope);
 const inShell = url => SHELL.some(p => new URL(p, scope).pathname === url.pathname);

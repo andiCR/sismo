@@ -24,7 +24,7 @@ const REGIONS = Object.keys(Places.REGIONS);
 const PUSH_HOSTS = /(^|\.)(fcm\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)$/;
 
 const enabled = env => !!(env.DB && env.VAPID_PRIVATE_JWK);
-const batchSize = env => Number(env.PUSH_BATCH) || 35;
+const batchSize = env => Number(env.PUSH_BATCH) || 33;
 const lagWarnMin = env => Number(env.LAG_WARN_MIN) || 5;
 
 // ---------------------------------------------------------------- helpers

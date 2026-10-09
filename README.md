@@ -1,7 +1,7 @@
 # Sismo: a live earthquake map
 
 A Windy-style map of seismic activity. It focuses on Costa Rica and works worldwide.
-It is a static site (HTML, CSS and JS) with no build step. The map needs no backend; a small Cloudflare Worker starts share-page builds and sends push notifications.
+It is a static site (HTML, CSS and JS) with no build step. The map needs no backend; a small Cloudflare Worker starts share-page builds (also when PTWC tsunami forecasts change) and sends push notifications.
 
 **Live site:** https://sismo.cr/ (Spanish: https://sismo.cr/?lang=es)
 
@@ -63,7 +63,7 @@ The same Worker sends push notifications and serves their API at `https://api.si
 - **When:** each cron run looks for quakes around Costa Rica (M3+, first seen within 30 minutes) and estimates the shaking at each region's towns (`js/shaking.js`). A region that reaches III gets a job; subscribers whose level it reaches get a push. The same quake from EMSC and USGS counts once.
 - **What the server keeps:** the browser's push endpoint, the regions, the level and the language. No location. The About panel says so.
 - **Pushes are empty.** The service worker (`sw.js`) asks `GET /push/latest?sub=<sha256 of the endpoint>` what to show ("Sismo M4.6 · Pacífico Central / Probablemente se sintió IV (leve) · 11 km al SO de Jacó · hace 6 min"), in the subscriber's language. There's nothing to encrypt, which keeps CPU per push tiny.
-- **Free plan batching:** a run may make 50 outgoing requests, so it sends at most `PUSH_BATCH` (35) pushes and the next run carries on. That's about 35 subscribers a minute. When reaching everyone takes more than `LAG_WARN_MIN` (5) minutes, measured after a notification or projected from the daily subscriber count, the Worker opens a GitHub issue ("Push notifications are slow to reach everyone"), or comments on it while it's open, at most once a day. That's the signal to move to Workers Paid and raise `PUSH_BATCH` to about 900.
+- **Free plan batching:** a run may make 50 outgoing requests, so it sends at most `PUSH_BATCH` (33) pushes and the next run carries on (the feeds, GitHub and the tsunami check use the rest). That's about 33 subscribers a minute. When reaching everyone takes more than `LAG_WARN_MIN` (5) minutes, measured after a notification or projected from the daily subscriber count, the Worker opens a GitHub issue ("Push notifications are slow to reach everyone"), or comments on it while it's open, at most once a day. That's the signal to move to Workers Paid and raise `PUSH_BATCH` to about 900.
 - iPhone only gets notifications in the installed app (iOS 16.4+), and the view explains that.
 
 Setup (once, from `worker/`, one command at a time in Windows PowerShell 5.1):
@@ -84,7 +84,20 @@ The deploy also creates `api.sismo.cr` (DNS record and certificate), since sismo
 
 Locally: `npm run db:init:local`, put `VAPID_PRIVATE_JWK='<output of node scripts/vapid-keys.mjs>'` in `worker/.dev.vars` (gitignored), and `npm run dev`. On localhost, `js/config.js` points the app at `http://localhost:8787/`.
 
-It also works on any other static host (Netlify, Cloudflare Pages, Vercel). All data is fetched directly by the browser, and every source sends `Access-Control-Allow-Origin: *`.
+### Tsunami forecasts (PTWC)
+
+After a big quake, the Pacific Tsunami Warning Center's threat messages say which coasts may see waves of which height (over 3 m, 1–3 m, 0.3–1 m, under 0.3 m; the first message only says "hazardous waves possible") and when the first wave should reach a list of places. `worker/src/tsunami.js` reads them from tsunami.gov:
+
+- `events/js/previous.js` lists recent messages from both US centres. The Atom feeds hold only the newest message of any kind (often a Hawaii or Guam one), so they aren't used.
+- For each event, the latest Pacific (`WEPA40`) or Caribbean (`WECA41`) threat message is read from its text bulletin: the forecast by height and the arrival-time table. Monthly tests are skipped. An event drops out 12 hours after its latest message; a final message ("the threat has passed") is passed on as `final`.
+
+tsunami.gov sends no CORS headers, but the forecasts don't go through the Worker on each visit: after a big quake that would be every open tab, and the Workers free plan's 100,000 requests a day also carry the notifications. Instead, the site build writes them to `data/tsunami.json` (on GitHub Pages, like the app), and the Worker's cron starts a build when PTWC has something new. It reads PTWC's index (one request) every minute while a M6.9+ quake from the last 6 hours is around, else every 5 minutes, and compares it with the deployed file's `sig`. A new message reaches the map 2–5 minutes after PTWC issues it. If tsunami.gov fails during a build, the build keeps the deployed file and marks it `error`, and the Worker waits 30 minutes before asking again.
+
+The app reads `data/tsunami.json` every 2 minutes while a quake of M6.5+ from the last 36 hours is loaded, or a forecast is out (`js/tsunami.js`, `loadTsunami` in `js/app.js`), with a query string that changes each minute to get past the Pages CDN's 10 minutes. It colours the coasts of the places named, from `data/tsunami-coasts.json`, and marks the arrival points. That file is built once by `node scripts/build-tsunami-coasts.mjs` from Natural Earth's 1:50m countries: coast is every edge no neighbour shares, split by the basin it faces, so a Pacific forecast colours Costa Rica's Pacific coast and not its Caribbean one. Places that are part of a bigger country there (Hawaii, Guadeloupe, the states of Micronesia) are cut out with a box; atolls too small for 1:50m only get named. Add a spelling to `PLACES` in that script when PTWC uses a new one.
+
+Nothing to set up beyond deploying the Worker (without it, the scheduled builds still refresh the file, just later). Locally, `npm run dev` doesn't build, so on localhost the app reads the Worker's `GET /tsunami` instead (`npm run dev` in `worker/`), which serves the same thing live.
+
+It also works on any other static host (Netlify, Cloudflare Pages, Vercel). All data is fetched directly by the browser, and every source sends `Access-Control-Allow-Origin: *`, except PTWC's, which the build publishes.
 
 ## Data sources
 
@@ -93,6 +106,7 @@ It also works on any other static host (Netlify, Cloudflare Pages, Vercel). All 
 | **EMSC** (`seismicportal.eu` FDSN API) | Global, including small local events from **OVSICORI-UNA** (`auth: UNA`) and **RSN-UCR** (`auth: UCR`) in Costa Rica | WebSocket push (`wss://www.seismicportal.eu/standing_order/websocket`) |
 | **USGS** GeoJSON feeds | Roughly M2.5+ worldwide, all magnitudes in the US | Polls `all_hour.geojson` every 60 s |
 | Plate boundaries | Bird (2003) PB2002 via `fraxen/tectonicplates` | n/a |
+| Tsunami forecasts | **PTWC** threat messages (tsunami.gov), published by the build as `data/tsunami.json`; coastlines from Natural Earth 1:50m | Every 2 min while a M6.5+ quake or a forecast is current; new messages arrive 2–5 min after PTWC issues them |
 
 Rough volumes: EMSC has ~570 events/day globally, ~11.5k per 30 days (about 6 MB of JSON). For Costa Rica over 30 days, about 195 events come from OVSICORI and 19 from RSN-UCR.
 
@@ -128,6 +142,7 @@ Matching Costa Rican news articles to quakes was prototyped in the Worker (commi
 - Event details, answer first: magnitude, place, time and depth, one shaking figure, Share. Then local time and nearby activity, with Costa Rica time, UTC, coordinates, energy and the full agency name under "Más datos". See "Don't clutter the views" in `CLAUDE.md`
 - **Year archive**: the period option named after the current year lists this year's notable quakes (M6.5+ worldwide, M4.5+ around Costa Rica), fetched from the EMSC or USGS FDSN API. The map, list, timeline (with month ticks) and replay all work on it. ¿Tembló? is hidden there, and the app never opens in this mode on a later visit
 - Shaking gradient around the selected quake: the USGS ShakeMap when there is one, else a labeled estimate (see "Shaking on the map")
+- **Tsunami forecasts**: while PTWC has one out, coasts coloured by forecast wave height, arrival-time points, and a key that says whose forecast it is and that it isn't an alert. The quake's detail gets one line in place of the USGS tsunami flag ("Pronóstico de tsunami del PTWC: olas de 1 a 3 m posibles en Panamá · Costa Rica: menos de 0,3 m. Boletín ↗"), or "the threat has passed" once PTWC says so. The layer menu shows a toggle only while there's a forecast (see "Tsunami forecasts (PTWC)")
 - Toasts for new events in view (or any M5+ worldwide)
 - "Near me" shows distances to each event
 - **Saved places**: "Lugares" in the settings saves up to 6 named points (tap the map, give it a name). They're kept only in the browser (`localStorage`, `sismo:places`). A quake's shaking block shows the estimated or measured intensity at each one, and at your location after "Near me"; outside a ShakeMap's grid, the estimate fills in
@@ -157,6 +172,7 @@ Besides pageviews, `track()` in `js/app.js` sends these events:
 | `official-report` | the agency link in the detail view was opened |
 | `replay`, `scrub` | timeline use |
 | `layer`, `color-by`, `globe` | map rail toggles, and the detail view's shaking toggle (`layer: shaking`) |
+| `tsunami` | `action`: `bulletin` (a PTWC bulletin link, `from` `detail` or `key`) or `popup` (a tap on the map, `what` `eta` or `coast`) |
 | `source`, `period`, `sort`, `min-mag`, `in-view`, `go-to`, `near-me` | filters and navigation |
 | `context` | a link in "Reports and coverage" was opened: `kind` `rsn`, `usgs`, `usgs-link`, `emsc`, `emsc-photos` or `wiki`; `mag`, `cr`, `source` |
 | `share-wait` | Share waited for a new quake's card: `outcome` `ready` (with `secs` waited), `skipped` ("Don't wait", with `secs`) or `timeout`; `mag`, `cr`, `source` |
@@ -185,8 +201,10 @@ The edit-time design check (hooks) is machine-local: it lives in the gitignored 
 - `js/places.js`: Costa Rican towns, for "25 km al SO de Quepos" descriptions
 - `scripts/share-kit.js`: share-card images (SVG) and share-page templating; runs in Node and in the browser
 - `scripts/build-site.mjs`: builds `_site/` with the share pages (used by the workflow)
-- `worker/`: Cloudflare Worker that starts a build as soon as a new quake needs a share page, and sends push notifications (`src/push.js`, `schema.sql`)
-- `js/config.js`: settings shared by the page and the service worker (the notification API address)
+- `worker/`: Cloudflare Worker that starts a build as soon as a new quake needs a share page, sends push notifications (`src/push.js`, `schema.sql`), and starts a build when PTWC's tsunami forecasts change (`src/tsunami.js`, also used by the build)
+- `js/config.js`: settings shared by the page and the service worker (the notification API and where tsunami forecasts come from)
+- `js/tsunami.js`: PTWC tsunami forecasts: matching to quakes, place names, map data
+- `data/tsunami-coasts.json`: coastlines by place and basin for the tsunami layer, built by `scripts/build-tsunami-coasts.mjs`
 - `js/sources.js`: data adapters (EMSC and USGS normalized to one event shape) and live feeds
 - `js/context.js`: "Reports and coverage" in the detail view (RSN-UCR, USGS, EMSC witnesses, Wikipedia)
 - `js/shaking.js`: the selected quake's shaking gradient (USGS ShakeMap, or an estimate from magnitude, depth and distance)

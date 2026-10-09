@@ -52,7 +52,7 @@
   // ---------------------------------------------------------------- state
   const DEFAULTS = {
     source: 'EMSC', period: '7d', minMag: 0, colorBy: 'depth', inView: true, sort: 'time', globe: false,
-    layers: { quakes: true, heat: false, plates: true, volcanoes: true, labels: true, shaking: true },
+    layers: { quakes: true, heat: false, plates: true, volcanoes: true, labels: true, shaking: true, tsunami: true },
   };
   const saved = (() => { try { return JSON.parse(localStorage.getItem('sismo:settings')) || {}; } catch { return {}; } })();
   const S = {
@@ -134,6 +134,7 @@
       monthDay: new Intl.DateTimeFormat(loc, { month: 'short', day: 'numeric' }),
       month: new Intl.DateTimeFormat(loc, { month: 'short' }),
       date: new Intl.DateTimeFormat(loc, { dateStyle: 'medium' }),
+      time: new Intl.DateTimeFormat(loc, { timeStyle: 'short' }),
       num: n => n.toLocaleString(loc),
     };
   }
@@ -386,6 +387,41 @@
       paint: { 'text-color': shakeColor, 'text-halo-color': 'rgba(20,19,17,0.9)', 'text-halo-width': 1.4 },
     }, 'glow');
 
+    // PTWC tsunami forecast (js/tsunami.js): coasts coloured by forecast height under the basemap's
+    // labels, arrival-time points (diamonds: circles are quakes) under the quakes.
+    const tsuColor = ['match', ['get', 'cat'], ...Object.entries(Tsunami.COLORS).flat(), '#ffffff'];
+    const tsuThreat = ['!=', ['get', 'cat'], '<0.3'];
+    map.addSource('tsunami-coasts', { type: 'geojson', data: EMPTY_FC });
+    map.addSource('tsunami-points', { type: 'geojson', data: EMPTY_FC });
+    map.addLayer({
+      id: 'tsunami-casing', type: 'line', source: 'tsunami-coasts', filter: tsuThreat, layout: { visibility: 'none', 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': 'rgba(20,19,17,0.85)', 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 4, 6, 6, 10, 8] },
+    }, below);
+    // Solid for a forecast height; dashed for "hazardous waves possible" (no height yet) and, thinner,
+    // for under 0.3 m. Three layers because dash patterns can't vary by feature.
+    const tsuLine = (id, cats, width, dash) => map.addLayer({
+      id, type: 'line', source: 'tsunami-coasts', filter: ['in', ['get', 'cat'], ['literal', cats]],
+      layout: { visibility: 'none', 'line-join': 'round', 'line-sort-key': ['get', 'rank'] },
+      paint: { 'line-color': tsuColor, 'line-width': ['interpolate', ['linear'], ['zoom'], 1, width[0], 6, width[1], 10, width[2]], ...(dash && { 'line-dasharray': dash }) },
+    }, below);
+    tsuLine('tsunami-low', ['<0.3'], [1, 1.8, 2.4], [1.5, 1.5]);
+    tsuLine('tsunami-coast', ['3+', '1-3', '0.3-1'], [2, 3.5, 5]);
+    tsuLine('tsunami-haz', ['haz'], [2, 3.5, 5], [2, 1]);
+    addDiamondIcon();
+    map.addLayer({
+      id: 'tsunami-points', type: 'symbol', source: 'tsunami-points',
+      layout: {
+        visibility: 'none', 'symbol-sort-key': ['-', 0, ['get', 'rank']],
+        'icon-image': 'sismo-diamond', 'icon-size': ['interpolate', ['linear'], ['zoom'], 2, 0.7, 7, 1], 'icon-allow-overlap': true,
+        'text-field': ['step', ['zoom'], '', 5, ['concat', ['get', 'place'], '\n', ['get', 'eta']]],
+        'text-font': FONT_REG, 'text-size': 11, 'text-anchor': 'left', 'text-offset': [0.9, 0], 'text-optional': true, 'text-justify': 'left',
+      },
+      paint: {
+        'icon-color': tsuColor, 'icon-halo-color': 'rgba(20,19,17,0.9)', 'icon-halo-width': 1.5,
+        'text-color': '#ece7df', 'text-halo-color': 'rgba(20,19,17,0.9)', 'text-halo-width': 1.4,
+      },
+    }, 'glow');
+
     addVolcanoIcon();
     map.addLayer({
       id: 'volcanoes', type: 'symbol', source: 'volcanoes',
@@ -408,6 +444,16 @@
     map.addImage('sismo-volcano', g.getImageData(0, 0, s, s), { pixelRatio: 2 });
   }
 
+  // A diamond for tsunami arrival points, tinted by forecast height (an SDF image takes icon-color).
+  function addDiamondIcon() {
+    const s = 32, c = document.createElement('canvas');
+    c.width = c.height = s;
+    const g = c.getContext('2d');
+    g.beginPath(); g.moveTo(s / 2, 4); g.lineTo(s - 4, s / 2); g.lineTo(s / 2, s - 4); g.lineTo(4, s / 2); g.closePath();
+    g.fillStyle = '#ffffff'; g.fill();
+    map.addImage('sismo-diamond', g.getImageData(0, 0, s, s), { pixelRatio: 2, sdf: true });
+  }
+
   function applyLayerVisibility() {
     const vis = on => (on ? 'visible' : 'none');
     const L = S.layers;
@@ -416,6 +462,7 @@
     map.setLayoutProperty('plates', 'visibility', vis(L.plates));
     map.setLayoutProperty('volcanoes', 'visibility', vis(L.volcanoes));
     map.setLayoutProperty('quake-labels', 'visibility', vis(L.labels && L.quakes));
+    drawTsunami();
   }
 
   /* Re-style everything against a reference time: "now" when live,
@@ -477,6 +524,7 @@
       const e = S.events.get(S.selectedId);
       if (e) renderDetail(e);
     }
+    loadTsunami();
   }
 
   // ---------------------------------------------------------------- data loading
@@ -635,7 +683,6 @@
     watchSharePage(e);
     updateShaking(e);
     const alerts = [];
-    if (e.tsunami) alerts.push(T('alert.tsunami'));
     if (e.alert && e.alert !== 'green') alerts.push(T('alert.pager', { level: e.alert }));
     const sub = [
       when(e.t),
@@ -658,7 +705,7 @@
         ${near ? `<p class="d-near">${esc(near)}</p>` : ''}
         <p>${esc(sub)}</p>
       </div>
-      ${alerts.map(t => `<div class="alert">${ICON_WARN}${esc(t)}</div>`).join('')}
+      ${tsunamiHtml(e)}${alerts.map(t => `<div class="alert">${ICON_WARN}${esc(t)}</div>`).join('')}
       <div class="d-actions d-share"${waiting ? ' aria-busy="true"' : ''}>
         <button class="btn primary" data-act="share"${waiting ? ' disabled' : ''}>${ICON_SHARE}${T('share')}</button>
         <a class="btn wa" data-act="whatsapp" href="https://wa.me/?text=${encodeURIComponent(`${shareText(e)} ${shareUrl(e, 'wa')}`)}" target="_blank" rel="noopener"${waiting ? ' aria-disabled="true" tabindex="-1"' : ''}>${ICON_WA}WhatsApp</a>
@@ -884,6 +931,98 @@
     const felt = spots.map(p => ({ name: p.name, v: at(p) })).filter(p => p.v >= 1.5).sort((a, b) => b.v - a.v);
     if (!felt.length) return `<p class="shake-spots muted">${esc(T('shake.notFelt', { places: S.places.length > 0 }))}</p>`;
     return `<p class="shake-spots">${felt.slice(0, 4).map(p => `<b>${esc(p.name)}:</b> ${esc(intensity(p.v))}`).join(' · ')}</p>`;
+  }
+
+  // ---------------------------------------------------------------- tsunami forecasts (js/tsunami.js)
+  /* PTWC's forecast after a big quake: which coasts may see waves of which height, and when the first
+     wave should reach some places. It's PTWC's, written for national authorities, and shown as that,
+     never as an alert of ours: coloured coasts and arrival points while it's current, a key on the map
+     that says what it is, and one line in the quake's alert slot (in place of the USGS tsunami flag).
+     Fetched only while a quake that could cause one is loaded (TSU_MIN_MAG+ within TSU_WINDOW), or a
+     forecast is out. */
+  const TSU_MIN_MAG = 6.5, TSU_WINDOW = 36 * HOUR, TSU_POLL = 2 * 60e3;
+  const TSU_LINES = ['tsunami-coast', 'tsunami-haz', 'tsunami-low'];
+  const tsu = { list: [], data: null, map: null, at: 0, busy: false, drawn: null };
+  const tsuActive = () => !!tsu.map && tsu.list.some(b => !b.final);
+  const tsuWanted = () => tsu.list.length > 0 || [...S.events.values()].some(e => magOf(e) >= TSU_MIN_MAG && Date.now() - e.t < TSU_WINDOW);
+
+  async function loadTsunami() {
+    if (tsu.busy || Date.now() - tsu.at < TSU_POLL || !tsuWanted()) return;
+    tsu.busy = true;
+    try {
+      const list = await Tsunami.forecasts();
+      tsu.at = Date.now();
+      if (list.some(b => !b.final)) tsu.data ||= await Tsunami.coasts();
+      if (JSON.stringify(list) === JSON.stringify(tsu.list)) return;
+      tsu.list = list;
+      tsu.map = tsu.data ? Tsunami.mapData(list, tsu.data) : null;
+      drawTsunami();
+      const e = detailOpen() && S.events.get(S.selectedId);
+      if (e) renderDetail(e);
+    } catch (err) {
+      tsu.at = Date.now(); // try again at the next poll
+      console.warn('tsunami:', err.message);
+    } finally {
+      tsu.busy = false;
+    }
+  }
+
+  function drawTsunami() {
+    if (!map.getSource('tsunami-coasts')) return;
+    const active = tsuActive(), on = active && S.layers.tsunami;
+    for (const id of ['tsunami-casing', ...TSU_LINES, 'tsunami-points']) map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+    $('#rail [data-layer="tsunami"]').hidden = !active;
+    renderTsunamiKey(on);
+    if (!on || tsu.drawn === `${S.lang}|${tsu.at}`) return;
+    tsu.drawn = `${S.lang}|${tsu.at}`;
+    map.getSource('tsunami-coasts').setData(tsu.map.coasts);
+    const points = tsu.map.points.features.map(f => ({ ...f, properties: { ...f.properties, eta: F.time.format(f.properties.t) } }));
+    map.getSource('tsunami-points').setData({ type: 'FeatureCollection', features: points });
+  }
+
+  // The key says what the colours are, whose forecast it is, and that it isn't an alert.
+  function renderTsunamiKey(on) {
+    const el = $('#tsunamiKey');
+    el.hidden = !on;
+    if (!on) return;
+    const latest = tsu.list.filter(b => !b.final).sort((a, b) => b.issued - a.issued)[0];
+    el.innerHTML = `<b>${esc(T('tsu.forecast'))}</b>
+      <span class="tsu-cats">${tsu.map.cats.map(c => `<span><i style="--c:${Tsunami.COLORS[c]}"${c === 'haz' || c === '<0.3' ? ' class="dash"' : ''}></i>${esc(T(`tsu.cat.${c}`))}</span>`).join('')}</span>
+      <span class="tsu-note">${esc(T('tsu.key.note'))} ${tsuLink(latest)}</span>`;
+  }
+
+  const tsuLink = b => (safeUrl(b?.url) ? `<a href="${esc(b.url)}" target="_blank" rel="noopener" data-act="tsunami-bulletin">${esc(T('tsu.bulletin'))}</a>` : '');
+  const lowerFirst = s => s.charAt(0).toLowerCase() + s.slice(1);
+
+  /* The quake's line: "Pronóstico de tsunami del PTWC: olas de 1 a 3 m posibles en Panamá ·
+     Costa Rica: menos de 0,3 m. Boletín ↗". The strongest forecast, then Costa Rica's if it's lower. */
+  function tsunamiHtml(e) {
+    const list = Tsunami.forQuake(tsu.list, e);
+    const line = (html, cls = '') => `<div class="alert tsu${cls}">${ICON_WARN}<span>${html}</span></div>`;
+    if (!list.length) return e.tsunami ? line(esc(T('alert.tsunami'))) : '';
+    const current = list.filter(b => !b.final);
+    // PTWC's last word: the threat has passed. Said plainly, without the alert tint.
+    if (!current.length) return line(`${esc(T(list[0].largely ? 'tsu.final.largely' : 'tsu.final'))}. ${tsuLink(list[0])}`, ' calm');
+    const places = Tsunami.byPlace(current);
+    const rank = c => Tsunami.CATS.indexOf(c);
+    const top = Tsunami.CATS.find(c => places.some(p => p.cat === c));
+    const name = p => Tsunami.placeName(p, tsu.data, S.lang);
+    const names = [...new Set(places.filter(p => p.cat === top).map(p => name(p.place)))];
+    const shown = names.length > 4 ? [...names.slice(0, 3), T('tsu.more', { n: names.length - 3 })] : names;
+    let text = T('tsu.in', { waves: lowerFirst(T(`tsu.waves.${top}`)), places: new Intl.ListFormat(F.loc, { type: 'conjunction' }).format(shown) });
+    const cr = places.filter(p => Tsunami.isCR(p.place, tsu.data)).sort((a, b) => rank(a.cat) - rank(b.cat))[0];
+    if (cr && cr.cat !== top) text += ` · ${name(cr.place)}: ${lowerFirst(T(`tsu.cat.${cr.cat}`))}`;
+    return line(`<b>${esc(T('tsu.forecast'))}:</b> ${esc(text)}. ${tsuLink(current[0])}`);
+  }
+
+  function tsunamiPopupHtml(f) {
+    const p = f.properties;
+    if (f.layer.id === 'tsunami-points') {
+      const mins = Math.round((p.t - Date.now()) / 60e3);
+      const rel = mins > 0 ? T('tsu.in.time', { n: mins }) : ago(p.t);
+      return `<b>${esc(p.place)}</b>, ${esc(Tsunami.placeName(p.region, tsu.data, S.lang))}<br>${esc(T('tsu.eta', { time: F.time.format(p.t), rel }))}<br><span>${esc(T(`tsu.waves.${p.cat}`))} · PTWC</span>`;
+    }
+    return `<b>${esc(Tsunami.placeName(p.r, tsu.data, S.lang))}</b><br>${esc(T(`tsu.waves.${p.cat}`))}<br><span>${esc(T('tsu.forecast'))}</span>`;
   }
 
   // ---------------------------------------------------------------- sharing
@@ -1375,6 +1514,7 @@
     renderInstall();
     renderNotify();
     pushLanguage();
+    drawTsunami();
     drawTimeline();
     if (!$('#loading').hidden) $('#loadingText').textContent = loadingText();
   }
@@ -1624,6 +1764,7 @@
     }
     else if (act === 'ctx' && S.selectedId) track('context', { kind: el.dataset.kind, ...evInfo(S.events.get(S.selectedId)) });
     else if (act === 'history') openHistoric(el.dataset.id);
+    else if (act === 'tsunami-bulletin') track('tsunami', { action: 'bulletin', from: 'detail' });
     else if (act === 'install') installApp();
     else if (act === 'push-save') pushSave();
     else if (act === 'push-off') pushOff();
@@ -1670,6 +1811,16 @@
   map.on('mouseleave', 'quakes', () => { map.getCanvas().style.cursor = ''; hoverPopup.remove(); });
   map.on('mouseenter', 'volcanoes', () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'volcanoes', () => { map.getCanvas().style.cursor = ''; });
+  for (const id of ['tsunami-points', ...TSU_LINES]) {
+    map.on('mousemove', id, ev => {
+      if (map.queryRenderedFeatures(ev.point, { layers: ['quakes'] }).length) return; // the quake's popup wins
+      map.getCanvas().style.cursor = 'pointer';
+      hoverPopup.setLngLat(ev.lngLat).setHTML(tsunamiPopupHtml(ev.features[0])).addTo(map);
+    });
+    map.on('mouseleave', id, () => { map.getCanvas().style.cursor = ''; hoverPopup.remove(); });
+  }
+
+  $('#tsunamiKey').addEventListener('click', e => { if (e.target.closest('a')) track('tsunami', { action: 'bulletin', from: 'key' }); });
 
   map.on('dragstart', () => { if (isMobile()) closeMenus(); });
 
@@ -1689,6 +1840,14 @@
     if (v.length) {
       new maplibregl.Popup({ className: 'hover', offset: 10, closeButton: false })
         .setLngLat(v[0].geometry.coordinates).setHTML(`<b>${esc(v[0].properties.name)}</b><br><span>${esc(T('volcano.popup'))}</span>`).addTo(map);
+      return;
+    }
+    const tq = map.queryRenderedFeatures(box, { layers: ['tsunami-points', ...TSU_LINES] });
+    if (tq.length) {
+      const f = tq.find(x => x.layer.id === 'tsunami-points') || tq[0];
+      track('tsunami', { action: 'popup', what: f.layer.id === 'tsunami-points' ? 'eta' : 'coast' });
+      new maplibregl.Popup({ className: 'hover', offset: 10, closeButton: false, maxWidth: '280px' })
+        .setLngLat(f.geometry.type === 'Point' ? f.geometry.coordinates : ev.lngLat).setHTML(tsunamiPopupHtml(f)).addTo(map);
       return;
     }
     if (S.selectedId) closeDetail();

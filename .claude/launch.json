@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["scripts/serve.mjs", "--port", "8123"],
       "port": 8123
+    },
+    {
+      "name": "worker",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["worker/node_modules/wrangler/bin/wrangler.js", "dev", "--config", "worker/wrangler.toml", "--port", "8787"],
+      "port": 8787
     }
   ]
 }

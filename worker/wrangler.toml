@@ -19,9 +19,9 @@ SITE_URL = "https://sismo.cr/"
 GITHUB_REPO = "andiCR/sismo"
 GITHUB_WORKFLOW = "pages.yml"
 GITHUB_REF = "main"
-# Pushes per cron run. The free plan allows 50 outgoing requests per run and the feeds and GitHub
-# use up to ~10, so 35 leaves room. On Workers Paid, raise it to about 900.
-PUSH_BATCH = "35"
+# Pushes per cron run. The free plan allows 50 outgoing requests per run, and the feeds, GitHub and
+# the tsunami check (src/tsunami.js) use up to ~14, so 33 leaves room. On Workers Paid, raise it to about 900.
+PUSH_BATCH = "33"
 # Open a GitHub issue when reaching every subscriber takes longer than this (minutes).
 LAG_WARN_MIN = "5"
 

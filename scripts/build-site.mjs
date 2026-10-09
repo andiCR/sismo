@@ -5,6 +5,8 @@
      keep theirs for good
    - e/manifest.json: which share pages exist and when their data was fetched, read by the build
      trigger (worker/) and by the app's Share button
+   - data/tsunami.json: the current PTWC tsunami forecasts (worker/src/tsunami.js), read by the app
+     and by the build trigger
    - a site-wide preview image, 404.html (sends unknown e/<id>/ links into the app), sitemap.xml, robots.txt
    Runs in GitHub Actions (see .github/workflows/pages.yml). Usage: SITE_URL=https://example.org/ node scripts/build-site.mjs */
 import fs from 'node:fs/promises';
@@ -60,7 +62,16 @@ async function fontFiles() {
 const t0 = Date.now();
 await fs.rm(OUT, { recursive: true, force: true });
 await fs.mkdir(OUT, { recursive: true });
-for (const p of ['index.html', 'css', 'js', 'icons', 'manifest.webmanifest', 'sw.js']) await fs.cp(path.join(ROOT, p), path.join(OUT, p), { recursive: true });
+for (const p of ['index.html', 'css', 'js', 'data', 'icons', 'manifest.webmanifest', 'sw.js']) await fs.cp(path.join(ROOT, p), path.join(OUT, p), { recursive: true });
+
+// PTWC tsunami forecasts for the map (worker/src/tsunami.js says why they're a file). If tsunami.gov
+// fails, keep the deployed copy rather than drop a current forecast; `error` tells the build trigger
+// to wait longer before trying again.
+const { current: tsunamiNow } = await import('../worker/src/tsunami.js');
+let tsunami = await attempt('tsunami forecasts', () => tsunamiNow(), null);
+tsunami ||= await attempt('deployed tsunami forecasts', async () => ({ ...(await (await fetchOk(`${SITE_URL}data/tsunami.json?t=${Date.now()}`)).json()), fetched: Date.now(), error: true }), null);
+tsunami ||= { fetched: Date.now(), sig: null, events: [], error: true };
+await fs.writeFile(path.join(OUT, 'data', 'tsunami.json'), JSON.stringify(tsunami));
 
 // App icons as PNG, for launchers and iOS that don't take the SVG. apple-touch-icon is full bleed:
 // iOS rounds the corners itself.

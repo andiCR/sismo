@@ -115,6 +115,8 @@
         <p data-i18n-html="about.usgs"></p>
         <h3 data-i18n="about.plates.h">Plate boundaries</h3>
         <p data-i18n-html="about.plates"></p>
+        <h3 data-i18n="about.tsunami.h">Tsunami forecasts</h3>
+        <p data-i18n-html="about.tsunami"></p>
         <div id="install" class="install" hidden></div>
         <h3 data-i18n="about.privacy.h">Privacy</h3>
         <p data-i18n-html="about.privacy"></p>
@@ -147,6 +149,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 18L9 6l5 12M5.8 14h6.4M16 10.5c.6-.6 1.4-1 2.3-1 1.5 0 2.2.8 2.2 2.2V18M20.5 14.5c-3 0-4.8.6-4.8 2 0 1 .7 1.6 1.8 1.6 1.6 0 3-1.2 3-3"/></svg>
       <span data-i18n="layer.labels">Labels</span>
     </button>
+    <button data-layer="tsunami" data-i18n-title="layer.tsunami" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16c2 0 2.5-1.5 4.5-1.5S9 16 11 16s2.5-1.5 4.5-1.5S18 16 20 16h2"/><path d="M2 20c2 0 2.5-1.5 4.5-1.5S9 20 11 20s2.5-1.5 4.5-1.5S18 20 20 20h2"/><path d="M5 12c0-4 3-7 7-7 2.5 0 4.5 1.3 5 3.5-1.6-.9-4.2-.4-4.5 2.2"/></svg>
+      <span data-i18n="layer.tsunami">Tsunami (PTWC)</span>
+    </button>
     <hr>
     <div class="rail-title" data-i18n="colorBy">Color by</div>
     <button data-color="depth" data-i18n-title="color.depth">
@@ -175,6 +181,7 @@
     <div id="legend" class="legend"></div>
   </footer>
 
+  <aside id="tsunamiKey" class="surface tsu-key" aria-live="polite" hidden></aside>
   <div id="loading" class="surface" hidden><span class="spinner"></span><span id="loadingText">Loading…</span></div>
   <div id="toasts" aria-live="polite"></div>
 
@@ -185,6 +192,7 @@
   <script src="js/sources.js"></script>
   <script src="js/context.js"></script>
   <script src="js/shaking.js"></script>
+  <script src="js/tsunami.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

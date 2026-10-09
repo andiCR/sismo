@@ -172,12 +172,13 @@ Warm, low-chroma near-blacks with one orange signal colour; every other hue is d
 ### Status
 - **Field Green** (#5fd38d): live connection dot, active Live button, calm ¿Tembló? state.
 - **Amber Replay** (#f2c14e): replay/scrubbing state and the timeline cursor while replaying.
-- **Fault Red** (#ff6b6b): offline status and error toasts. Tsunami and PAGER alerts use a Fault Red tint (rgba(255, 107, 107, 0.12)) with #ffc0b8 text.
+- **Fault Red** (#ff6b6b): offline status and error toasts. Tsunami and PAGER alerts use a Fault Red tint (rgba(255, 107, 107, 0.12)) with #ffc0b8 text. A tsunami threat PTWC has declared over drops the tint: Drum Black Raised with Graphite text.
 
 ### Data scales
 - **Depth** (0 → 700 km): #ff4d5e, #ff8a3d, #ffd23f, #8ee06b, #35c3e8, #6f7bff, #c77dff, interpolated. Shared by the map, list dots, timeline markers, legend and share cards.
 - **Age**: #ffffff → #ff4d5e (1 h) → #ff9a3d (24 h) → #ffd23f (7 d) → #5d7390 (30 d).
 - **Plate boundaries**: #ff9f43 at 40% opacity.
+- **Tsunami forecast** (PTWC wave height, on coastlines): over 3 m #ff6b6b, 1–3 m #ff9a3d, 0.3–1 m #ffd23f, solid on a dark casing; "hazardous waves possible" (no height yet) #ff9a3d dashed; under 0.3 m #d4cec4, thin and dashed.
 
 ### Named Rules
 **The One Trace Rule.** Trace Orange is the only accent. It marks the primary action, the current selection and real urgency, and nothing decorative. Never add a second accent hue.
@@ -268,7 +269,7 @@ Crisp and slightly softened. Buttons, floating tools and alerts use 6px corners.
 The detail answers first and then gets out of the way. In order:
 1. **Head:** back, the agency's short name (full name in its title), a zoom-to-epicenter icon button, and "Reporte oficial ↗" as a quiet text link. No outlined secondary buttons.
 2. **Hero:** the Figure Display magnitude with its dot and type, the Title place, the "near" line in Trace Orange Text, then one Graphite line: when (time ago for the first week, a date after that) · depth with its class.
-3. Tsunami or PAGER alerts, only when the catalogue flags one.
+3. Tsunami or PAGER alerts, only when there is one. The tsunami line is PTWC's forecast when it has one for the quake ("Pronóstico de tsunami del PTWC: olas de 1 a 3 m posibles en Panamá · Costa Rica: menos de 0,3 m. Boletín ↗": the strongest category, then Costa Rica's if lower), otherwise the USGS tsunami flag. Never both.
 4. **Share and WhatsApp.**
 5. **Shaking:** one block with the Mercalli scale, one headline figure ("Hasta VI cerca del epicentro"), then one line for the visitor and their saved places ("**Usted:** IV (leve) · **Casa:** III (débil)", names in Chart Ink, at most four, only those at II or above; otherwise "Probablemente no se sintió en sus lugares" in Graphite), and one source line (the model or ShakeMap, plus the "¿Lo sintió?" count). When a quake has no shaking field, the "typical effects" sentence takes its place. The two never appear together.
 6. **Facts grid:** local time (full width unless distance-from-you is known), then "En la zona": one sentence on recent activity nearby and, for M4.5+, one on history ("Ninguno tan fuerte a menos de 100 km desde el M6.2 del 12 oct 2024"), with the older quake as a Trace Orange Text link that opens it.
@@ -301,6 +302,12 @@ The detail answers first and then gets out of the way. In order:
 
 ### Layer tools
 - A floating menu (176px, 4px padding) of icon-and-label rows. Active rows show Chart Ink text and a Trace Orange icon; inactive icons are at 70% opacity. On phones it collapses to a single layers button.
+- "Tsunami (PTWC)" appears in it only while PTWC has a forecast out.
+
+### Tsunami forecast on the map
+- Coasts coloured by PTWC's forecast height (see Data scales), under the basemap's labels. Arrival points are small diamonds in the same colour (circles are quakes), labelled with the place and local arrival time from zoom 5. A tap or hover gives the place, the arrival time with "en 37 min" or "hace 5 min", and the forecast.
+- A key floats top-left of the map (a map tool, like the layer menu): "Pronóstico de tsunami del PTWC", the categories present, and one Graphite line: "Para autoridades nacionales, no es una alerta. En Costa Rica, siga a la CNE." with a link to the bulletin. It shows whenever the coasts are coloured, so the colours never appear without saying whose they are.
+- No banner, sound, pulse or red wash: the map shows PTWC's forecast in its own words and sizes, like any other data layer.
 
 ### Share cards (1200×630)
 - The same system as an image. A solid Drum Black panel (560px) on the left with a hairline edge holds the wordmark, a dot plus "Magnitud" label, the condensed magnitude figure (138px), the place (42px/700), the "near" line in Trace Orange Text and the time and depth. The footer is the site and "Datos: <agency short name>".
