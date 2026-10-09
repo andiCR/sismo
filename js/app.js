@@ -165,6 +165,24 @@
     return x <= e;
   }
 
+  /* How far a quake is estimated to be felt (III), so a big one in Panama or Nicaragua counts in
+     Costa Rica: in the map view's list and in "Did it shake?". */
+  const feltKmCache = new WeakMap();
+  function feltKm(e) {
+    if (magOf(e) < 4.5) return 0; // smaller ones aren't felt far beyond their epicentre
+    if (!feltKmCache.has(e)) feltKmCache.set(e, Shaking.feltKm(e));
+    return feltKmCache.get(e);
+  }
+
+  function feltInBounds(b, e) {
+    if (!feltKm(e)) return false;
+    const w = b.getWest(), east = b.getEast();
+    const x = ((((e.lon - w) % 360) + 360) % 360) + w; // past the east edge when it isn't in view
+    const lon = x <= east ? x : x - east < w + 360 - x ? east : w;
+    const lat = Math.min(b.getNorth(), Math.max(b.getSouth(), e.lat));
+    return distKm(e, { lat, lon }) <= feltKm(e);
+  }
+
   const hexRgb = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
   function ramp(stops, v) {
     if (!Number.isFinite(v) || v <= stops[0][0]) return hexRgb(stops[0][1]);
@@ -529,7 +547,7 @@
     const out = [];
     for (const e of S.events.values()) {
       if (!passesMag(e) || e.t > ref) continue;
-      if (b && !inBounds(b, e.lon, e.lat)) continue;
+      if (b && !inBounds(b, e.lon, e.lat) && !feltInBounds(b, e)) continue;
       out.push(e);
     }
     return out;
@@ -935,6 +953,7 @@
     const m = magOf(e), d = e.depth ?? 10;
     return (m >= 3 && d <= 70) || (m >= 3.5 && d <= 200) || m >= 4.2;
   };
+  const CR_TOWNS = Object.values(Places.REGIONS).flat();
 
   function renderTemblo() {
     const el = $('#temblo');
@@ -944,11 +963,16 @@
     const inScope = S.userLoc
       ? e => distKm(S.userLoc, e) <= 200
       : inCR;
+    // Bigger quakes further away whose estimated shaking reaches here.
+    const reaches = S.userLoc
+      ? e => distKm(S.userLoc, e) <= feltKm(e)
+      : e => feltKm(e) > 0 && CR_TOWNS.some(t => distKm(t, e) <= feltKm(e));
     let felt = null, last = null;
     for (const e of S.events.values()) {
-      if (now - e.t > DAY || !inScope(e)) continue;
-      if (!last || e.t > last.t) last = e;
-      if (likelyFelt(e) && (!felt || e.t > felt.t)) felt = e;
+      if (now - e.t > DAY) continue;
+      const here = inScope(e);
+      if (here && (!last || e.t > last.t)) last = e;
+      if (((here && likelyFelt(e)) || reaches(e)) && (!felt || e.t > felt.t)) felt = e;
     }
     const target = felt || last;
     const state = felt ? (now - felt.t < HOUR ? 'now' : 'recent') : 'calm';

@@ -16,6 +16,10 @@ const { Sources } = globalThis;
 const EMSC_API = 'https://www.seismicportal.eu/fdsnws/event/1/query';
 const USGS_FEED = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson'; // refreshed every minute
 const WINDOW = 6 * 36e5; // older quakes are left to the scheduled builds
+// Around Costa Rica, wider than Sources.SHARE_AREA: quakes just past it (western Panama, southern
+// Nicaragua) can be felt in Costa Rica, so they're checked for notifications. M5+ comes from anywhere.
+const NEAR = { w: -89, e: -79, s: 5, n: 13.5 };
+const inNear = e => e.lat >= NEAR.s && e.lat <= NEAR.n && e.lon >= NEAR.w && e.lon <= NEAR.e;
 // If a build fetched its data this long after a quake's last update and still made no page for it
 // (or shows another magnitude), the build's data doesn't agree with ours: stop asking.
 const GIVE_UP = 20 * 6e4;
@@ -35,6 +39,7 @@ export async function run(env) {
 }
 
 async function triggerBuild(env, quakes) {
+  quakes = quakes.filter(Sources.hasSharePage);
   const manifest = await fetchManifest(env);
   let due = quakes.filter(e => isDue(e, manifest));
   if (!due.length) return;
@@ -71,9 +76,9 @@ async function getJSON(url, init) {
   return r.json();
 }
 
-// Costa Rica area M2.5+ and M5+ anywhere, from both sources, as the build would see them.
+// M2.5+ around Costa Rica (NEAR) and M5+ anywhere, from both sources.
 async function recentQuakes() {
-  const A = Sources.SHARE_AREA;
+  const A = NEAR;
   const start = new Date(Date.now() - WINDOW).toISOString().slice(0, 19);
   const emsc = query => getJSON(`${EMSC_API}?format=json&starttime=${start}&${query}`)
     .then(j => (j?.features || []).map(Sources.fromEmsc));
@@ -85,7 +90,7 @@ async function recentQuakes() {
   for (const r of results) if (r.status === 'rejected') console.warn(`feed failed: ${r.reason.message}`);
   const byId = new Map();
   for (const e of results.flatMap(r => r.value || [])) {
-    if (Number.isFinite(e.lat) && Number.isFinite(e.lon) && Date.now() - e.t <= WINDOW && Sources.hasSharePage(e)) byId.set(e.id, e);
+    if (Number.isFinite(e.lat) && Number.isFinite(e.lon) && Date.now() - e.t <= WINDOW && (inNear(e) || (e.mag ?? 0) >= 5)) byId.set(e.id, e);
   }
   return [...byId.values()];
 }

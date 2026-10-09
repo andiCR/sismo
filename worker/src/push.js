@@ -13,10 +13,11 @@
 
    Needs: a D1 database bound as DB (schema.sql) and the VAPID_PRIVATE_JWK secret
    (scripts/vapid-keys.mjs). Without them the push parts stay off. */
-const { Sources, Shaking, Places, I18N } = globalThis;
+const { Shaking, Places, I18N } = globalThis;
 
 const NEW_WITHIN = 30 * 6e4;    // quakes older than this when first seen aren't news any more
 const JOB_TTL = 2 * 36e5;       // stop sending a job after this
+const FAR_KM = 800;             // the shaking estimate is fitted on data within a few hundred km
 const SCAN = 400;               // subscribers read per query
 const MAX_SUBS = 50000;         // refuse new subscriptions past this (abuse guard)
 const REGIONS = Object.keys(Places.REGIONS);
@@ -81,13 +82,14 @@ async function sendPush(sign, endpoint, topic) {
 }
 
 // ---------------------------------------------------------------- which regions felt it
-/** Estimated intensity per region, for regions reaching II.5 or more. */
+/** Estimated intensity per region, for regions reaching II.5 or more. Decided by the shaking, not
+    by where the epicentre is: a big quake off Panama is felt all over Costa Rica. */
 function regionLevels(e) {
   const f = Shaking.estimate(e);
   if (!f) return {};
   const out = {};
   for (const [k, towns] of Object.entries(Places.REGIONS)) {
-    const v = Math.max(...towns.map(t => f.at(t.lon, t.lat)));
+    const v = Math.max(...towns.map(t => (Places.distKm(e.lat, e.lon, t.lat, t.lon) <= FAR_KM ? f.at(t.lon, t.lat) : 0)));
     if (v >= 2.5) out[k] = Math.round(v * 10) / 10;
   }
   return out;
@@ -104,7 +106,7 @@ export async function tick(env, quakes) {
 
   // New jobs. The same quake can come from EMSC and USGS; the first one seen wins.
   for (const e of quakes) {
-    if (!Sources.inShareArea(e) || (e.mag ?? 0) < 3 || now - e.t > NEW_WITHIN) continue;
+    if ((e.mag ?? 0) < 3 || now - e.t > NEW_WITHIN) continue;
     if (recentJobs.some(j => Math.abs(j.t - e.t) < 90e3 && Places.distKm(j.lat, j.lon, e.lat, e.lon) < 100)) continue;
     const levels = regionLevels(e);
     if (!Object.keys(levels).length) continue;

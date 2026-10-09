@@ -45,6 +45,19 @@ window.Shaking = (() => {
   }
 
   // ---------------------------------------------------------------- estimate
+  // Epicentral distance where the estimate for `e` falls to `mmi` (it only decreases with distance).
+  function reachKm(e, mmi) {
+    const depth = clamp(e.depth ?? 10, 1, 700);
+    const at0 = epi => ipe(e.mag, Math.hypot(epi, depth));
+    if (at0(MAX_KM) >= mmi) return MAX_KM;
+    let lo = 0, hi = MAX_KM;
+    for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (at0(mid) > mmi) lo = mid; else hi = mid; }
+    return lo;
+  }
+
+  /** How far from the epicentre a quake is estimated to be felt (III), in km; 0 when it isn't. */
+  const feltKm = e => (e.mag == null ? 0 : reachKm(e, MIN_PEAK));
+
   /** Modelled field for a quake, or null when it's too small or deep to be felt much. */
   function estimate(e) {
     if (e.mag == null) return null;
@@ -52,13 +65,7 @@ window.Shaking = (() => {
     const at0 = epi => ipe(e.mag, Math.hypot(epi, depth));
     const peak = at0(0);
     if (peak < MIN_PEAK) return null;
-    // Epicentral distance where the estimate falls to `mmi` (it only decreases with distance).
-    const reach = mmi => {
-      if (at0(MAX_KM) >= mmi) return MAX_KM;
-      let lo = 0, hi = MAX_KM;
-      for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (at0(mid) > mmi) lo = mid; else hi = mid; }
-      return lo;
-    };
+    const reach = mmi => reachKm(e, mmi);
     const km = reach(FLOOR - 0.3); // a little past II, so the gradient has faded out at the edge
     const dLat = km / KM_DEG, dLon = km / (KM_DEG * Math.max(0.05, Math.cos(e.lat * RAD)));
     const lines = [];
@@ -169,5 +176,5 @@ window.Shaking = (() => {
     return { url: c.toDataURL('image/png'), coordinates: [[w, n], [e, n], [e, s], [w, s]] };
   }
 
-  return { estimate, shakemap, reports, image, PALETTE, ROMAN, level };
+  return { estimate, feltKm, shakemap, reports, image, PALETTE, ROMAN, level };
 })();
